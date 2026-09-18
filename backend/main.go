@@ -24,7 +24,7 @@ func main() {
 	config.ConnectDB()
 
 	// Connect to Redis / Memurai
-	config.ConnectRedis()
+	// config.ConnectRedis()
 
 	// Create Gin router
 	router := gin.Default()
