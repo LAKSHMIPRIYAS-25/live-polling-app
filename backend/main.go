@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -13,13 +14,13 @@ import (
 
 func main() {
 
-	// Load environment variables from .env
+	// Load .env file
 	err := godotenv.Load()
 	if err != nil {
 		fmt.Println("Warning: .env file not found")
 	}
 
-	// Connect to MongoDB Atlas
+	// Connect to MongoDB
 	config.ConnectDB()
 
 	// Connect to Redis / Memurai
@@ -57,13 +58,21 @@ func main() {
 	// Setup API routes
 	routes.SetupRoutes(router)
 
+	// Get PORT from environment
+	port := os.Getenv("PORT")
+
+	// Use 8080 locally if PORT is not set
+	if port == "" {
+		port = "8080"
+	}
+
 	fmt.Println("===================================")
 	fmt.Println("Live Polling Backend")
-	fmt.Println("Server: http://localhost:8080")
+	fmt.Println("Server: 0.0.0.0:" + port)
 	fmt.Println("===================================")
 
 	// Start server
-	err = router.Run(":8080")
+	err = router.Run("0.0.0.0:" + port)
 	if err != nil {
 		panic(err)
 	}
