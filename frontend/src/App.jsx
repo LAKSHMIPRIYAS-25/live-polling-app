@@ -8,7 +8,6 @@ import {
 import PollPage from "./PollPage";
 
 const API_URL =
-  import.meta.env.VITE_API_URL ||
   "https://live-polling-app-4.onrender.com/api";
 
 // ========================================
