@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 
 	"live-polling-backend/config"
 	"live-polling-backend/routes"
@@ -12,7 +13,13 @@ import (
 
 func main() {
 
-	// Connect to MongoDB
+	// Load environment variables from .env
+	err := godotenv.Load()
+	if err != nil {
+		fmt.Println("Warning: .env file not found")
+	}
+
+	// Connect to MongoDB Atlas
 	config.ConnectDB()
 
 	// Connect to Redis / Memurai
@@ -25,6 +32,7 @@ func main() {
 	router.Use(cors.New(cors.Config{
 		AllowOrigins: []string{
 			"http://localhost:5173",
+			"https://lakshmipriyas-25.github.io",
 		},
 
 		AllowMethods: []string{
@@ -55,5 +63,8 @@ func main() {
 	fmt.Println("===================================")
 
 	// Start server
-	router.Run(":8080")
+	err = router.Run(":8080")
+	if err != nil {
+		panic(err)
+	}
 }

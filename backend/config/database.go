@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -13,14 +14,20 @@ var DB *mongo.Database
 
 func ConnectDB() {
 
-	uri := "mongodb://127.0.0.1:27017"
+	uri := os.Getenv("MONGODB_URI")
+
+	if uri == "" {
+		panic("MONGODB_URI is not set")
+	}
 
 	clientOptions := options.Client().
-		ApplyURI(uri)
+		ApplyURI(uri).
+		SetConnectTimeout(30 * time.Second).
+		SetServerSelectionTimeout(30 * time.Second)
 
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
-		10*time.Second,
+		30*time.Second,
 	)
 	defer cancel()
 
@@ -38,5 +45,5 @@ func ConnectDB() {
 
 	DB = client.Database("live_polling")
 
-	fmt.Println("MongoDB connected successfully!")
+	fmt.Println("MongoDB Atlas connected successfully!")
 }
