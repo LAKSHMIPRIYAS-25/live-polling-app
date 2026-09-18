@@ -532,7 +532,7 @@ This project is created for learning and demonstration purposes.
 
 ## 👩‍💻 Author
 
-### Lakshmi Priya
+### Lakshmipriya S
 
 **Live Polling App**
 
