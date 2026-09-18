@@ -14,7 +14,7 @@ import (
 
 func main() {
 
-	// Load .env file
+	// Load .env file for local development
 	err := godotenv.Load()
 	if err != nil {
 		fmt.Println("Warning: .env file not found")
@@ -61,7 +61,7 @@ func main() {
 	// Get PORT from environment
 	port := os.Getenv("PORT")
 
-	// Use 8080 locally if PORT is not set
+	// Use 8080 for local development
 	if port == "" {
 		port = "8080"
 	}
@@ -73,6 +73,7 @@ func main() {
 
 	// Start server
 	err = router.Run("0.0.0.0:" + port)
+
 	if err != nil {
 		panic(err)
 	}
