@@ -1,0 +1,31 @@
+# Node.js
+node_modules/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Environment files
+.env
+.env.local
+frontend/.env
+frontend/.env.local
+
+# Go
+backend/bin/
+*.exe
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
