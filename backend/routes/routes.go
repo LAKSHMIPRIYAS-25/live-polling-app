@@ -8,24 +8,37 @@ import (
 
 func SetupRoutes(router *gin.Engine) {
 
+	// ================================
+	// POLL ROUTES
+	// ================================
+
 	// Create a new poll
-	router.POST("/api/polls", controllers.CreatePoll)
+	router.POST(
+		"/api/polls",
+		controllers.CreatePoll,
+	)
 
 	// Get all polls
-	router.GET("/api/polls", controllers.GetPolls)
+	router.GET(
+		"/api/polls",
+		controllers.GetPolls,
+	)
 
 	// Get a single poll
-	router.GET("/api/polls/:id", controllers.GetPoll)
+	router.GET(
+		"/api/polls/:id",
+		controllers.GetPoll,
+	)
 
-	// Vote for an option
+	// Vote for a poll option
 	router.POST(
 		"/api/polls/:id/vote/:optionId",
 		controllers.VotePoll,
 	)
 
-	// Real-time poll updates using Server-Sent Events
-	router.GET(
-		"/api/polls/:id/stream",
-		controllers.PollStream,
+	// Delete a poll
+	router.DELETE(
+		"/api/polls/:id",
+		controllers.DeletePoll,
 	)
 }

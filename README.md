@@ -48,6 +48,24 @@
 
 ---
 
+## 📸 Screenshots
+
+### 🏠 Home Page
+
+![Home Page](screenshots/home.png)
+
+### 📝 Create Poll
+
+![Create Poll](screenshots/create-poll.png)
+
+### 🗳️ Voting Page
+
+![Voting Page](screenshots/voting.png)
+
+### 📊 Live Results
+
+![Live Results](screenshots/live-results.png)
+
 ## 🏗️ Application Architecture
 
     ┌──────────────────────┐

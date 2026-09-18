@@ -1,64 +1,69 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 
 const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:8080/api";
 
 function PollPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
 
   const [poll, setPoll] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [voting, setVoting] = useState(false);
 
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [loading, setLoading] =
+    useState(true);
 
-  // --------------------------------------------------
-  // VOTER ID
-  // --------------------------------------------------
+  const [voting, setVoting] =
+    useState(false);
+
+  const [deleting, setDeleting] =
+    useState(false);
+
+  const [selectedOption, setSelectedOption] =
+    useState("");
+
+  const [error, setError] =
+    useState("");
+
+  const [success, setSuccess] =
+    useState("");
 
   const [voterId] = useState(() => {
-    let storedId =
-      localStorage.getItem("voterId");
+    let id =
+      localStorage.getItem(
+        "voterId"
+      );
 
-    if (!storedId) {
-      storedId = crypto.randomUUID();
+    if (!id) {
+      id = crypto.randomUUID();
 
       localStorage.setItem(
         "voterId",
-        storedId
+        id
       );
     }
 
-    return storedId;
+    return id;
   });
 
-  // --------------------------------------------------
-  // CHECK LOCAL VOTE STATUS
-  // --------------------------------------------------
-
-  const [hasVoted, setHasVoted] =
-    useState(() => {
-      return (
-        localStorage.getItem(
-          `voted_${id}`
-        ) === "true"
-      );
-    });
-
-  // --------------------------------------------------
-  // FETCH POLL
-  // --------------------------------------------------
+  // ========================================
+  // GET POLL
+  // ========================================
 
   const fetchPoll = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const response = await fetch(
-        `${API_URL}/polls/${id}`
-      );
+      const response =
+        await fetch(
+          `${API_URL}/polls/${id}`
+        );
 
       const data =
         await response.json();
@@ -66,16 +71,15 @@ function PollPage() {
       if (!response.ok) {
         throw new Error(
           data.error ||
-            "Poll not found"
+            "Failed to load poll"
         );
       }
 
-      setPoll(data.poll);
-    } catch (err) {
-      console.error(
-        "Fetch poll error:",
-        err
+      setPoll(
+        data.poll
       );
+    } catch (err) {
+      console.error(err);
 
       setError(
         err.message ||
@@ -86,9 +90,9 @@ function PollPage() {
     }
   };
 
-  // --------------------------------------------------
+  // ========================================
   // INITIAL LOAD
-  // --------------------------------------------------
+  // ========================================
 
   useEffect(() => {
     if (id) {
@@ -96,9 +100,9 @@ function PollPage() {
     }
   }, [id]);
 
-  // --------------------------------------------------
-  // REAL-TIME SSE
-  // --------------------------------------------------
+  // ========================================
+  // REAL-TIME UPDATES
+  // ========================================
 
   useEffect(() => {
     if (!id) {
@@ -115,15 +119,38 @@ function PollPage() {
       (event) => {
         try {
           const payload =
-            JSON.parse(event.data);
+            JSON.parse(
+              event.data
+            );
 
-          const updatedPoll =
-            payload.data ?? payload;
+          const data =
+            payload.data ??
+            payload;
 
-          setPoll(updatedPoll);
+          // Poll deleted
+          if (
+            data?.type ===
+              "deleted" ||
+            payload?.type ===
+              "deleted"
+          ) {
+            setPoll(null);
+
+            setError(
+              "This poll has been deleted."
+            );
+
+            eventSource.close();
+
+            return;
+          }
+
+          if (data) {
+            setPoll(data);
+          }
         } catch (err) {
           console.error(
-            "SSE parse error:",
+            "Real-time update error:",
             err
           );
         }
@@ -131,8 +158,10 @@ function PollPage() {
     );
 
     eventSource.onerror = () => {
+      // Do not show an error immediately.
+      // Browser EventSource automatically retries.
       console.log(
-        "Live connection temporarily unavailable."
+        "Real-time connection interrupted."
       );
     };
 
@@ -141,80 +170,46 @@ function PollPage() {
     };
   }, [id]);
 
-  // --------------------------------------------------
-  // TOTAL VOTES
-  // --------------------------------------------------
+  // ========================================
+  // VOTE
+  // ========================================
 
-  const getTotalVotes = () => {
-    if (
-      !poll ||
-      !Array.isArray(
-        poll.options
-      )
-    ) {
-      return 0;
+  const vote = async () => {
+    if (!selectedOption) {
+      setError(
+        "Please select an option."
+      );
+
+      return;
     }
 
-    return poll.options.reduce(
-      (total, option) =>
-        total +
-        Number(option.votes || 0),
-      0
-    );
-  };
-
-  // --------------------------------------------------
-  // VOTE
-  // --------------------------------------------------
-
-  const vote = async (optionId) => {
-    if (hasVoted || voting) {
+    if (!poll) {
       return;
     }
 
     try {
       setVoting(true);
-
       setError("");
       setSuccess("");
 
       const response =
         await fetch(
-          `${API_URL}/polls/${id}/vote/${optionId}`,
+          `${API_URL}/polls/${id}/vote/${selectedOption}`,
           {
             method: "POST",
 
             headers: {
-              "X-Voter-ID": voterId,
+              "Content-Type":
+                "application/json",
+
+              "X-Voter-ID":
+                voterId,
             },
           }
         );
 
       const data =
         await response.json();
-
-      // --------------------------------------------
-      // ALREADY VOTED
-      // --------------------------------------------
-
-      if (response.status === 409) {
-        setHasVoted(true);
-
-        localStorage.setItem(
-          `voted_${id}`,
-          "true"
-        );
-
-        setError(
-          "You have already voted in this poll."
-        );
-
-        return;
-      }
-
-      // --------------------------------------------
-      // OTHER ERROR
-      // --------------------------------------------
 
       if (!response.ok) {
         throw new Error(
@@ -223,24 +218,21 @@ function PollPage() {
         );
       }
 
-      // --------------------------------------------
-      // SUCCESS
-      // --------------------------------------------
-
       if (data.poll) {
-        setPoll(data.poll);
+        setPoll(
+          data.poll
+        );
       }
-
-      setHasVoted(true);
-
-      localStorage.setItem(
-        `voted_${id}`,
-        "true"
-      );
 
       setSuccess(
         "✓ Your vote has been recorded!"
       );
+
+      setSelectedOption("");
+
+      setTimeout(() => {
+        setSuccess("");
+      }, 3000);
     } catch (err) {
       console.error(
         "Vote error:",
@@ -256,16 +248,81 @@ function PollPage() {
     }
   };
 
-  // --------------------------------------------------
-  // SHARE POLL
-  // --------------------------------------------------
+  // ========================================
+  // DELETE POLL
+  // ========================================
+
+  const deletePoll = async () => {
+    if (!poll) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        "Are you sure you want to delete this poll?"
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      setError("");
+      setSuccess("");
+
+      const response =
+        await fetch(
+          `${API_URL}/polls/${id}`,
+          {
+            method: "DELETE",
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            "Failed to delete poll."
+        );
+      }
+
+      setSuccess(
+        "✓ Poll deleted successfully!"
+      );
+
+      setTimeout(() => {
+        navigate("/");
+      }, 700);
+    } catch (err) {
+      console.error(
+        "Delete error:",
+        err
+      );
+
+      setError(
+        err.message ||
+          "Unable to delete poll."
+      );
+
+      setDeleting(false);
+    }
+  };
+
+  // ========================================
+  // SHARE
+  // ========================================
 
   const sharePoll = async () => {
     const shareUrl =
       window.location.href;
 
     try {
-      if (navigator.share) {
+      if (
+        navigator.share
+      ) {
         await navigator.share({
           title:
             poll?.question ||
@@ -276,21 +333,19 @@ function PollPage() {
 
           url: shareUrl,
         });
+      } else {
+        await navigator.clipboard.writeText(
+          shareUrl
+        );
 
-        return;
+        setSuccess(
+          "✓ Poll link copied!"
+        );
+
+        setTimeout(() => {
+          setSuccess("");
+        }, 2500);
       }
-
-      await navigator.clipboard.writeText(
-        shareUrl
-      );
-
-      setSuccess(
-        "✓ Poll link copied!"
-      );
-
-      setTimeout(() => {
-        setSuccess("");
-      }, 2500);
     } catch (err) {
       console.log(
         "Share cancelled:",
@@ -299,9 +354,52 @@ function PollPage() {
     }
   };
 
-  // --------------------------------------------------
-  // LOADING UI
-  // --------------------------------------------------
+  // ========================================
+  // TOTAL VOTES
+  // ========================================
+
+  const getTotalVotes = () => {
+    if (!poll?.options) {
+      return 0;
+    }
+
+    return poll.options.reduce(
+      (
+        total,
+        option
+      ) =>
+        total +
+        Number(
+          option.votes || 0
+        ),
+      0
+    );
+  };
+
+  // ========================================
+  // PERCENTAGE
+  // ========================================
+
+  const getPercentage = (
+    votes
+  ) => {
+    const total =
+      getTotalVotes();
+
+    if (total === 0) {
+      return 0;
+    }
+
+    return Math.round(
+      (Number(votes || 0) /
+        total) *
+        100
+    );
+  };
+
+  // ========================================
+  // LOADING
+  // ========================================
 
   if (loading) {
     return (
@@ -319,8 +417,11 @@ function PollPage() {
             </Link>
 
             <div className="live-badge">
+
               <span className="live-dot"></span>
+
               LIVE
+
             </div>
 
           </div>
@@ -345,9 +446,9 @@ function PollPage() {
     );
   }
 
-  // --------------------------------------------------
-  // ERROR / NOT FOUND
-  // --------------------------------------------------
+  // ========================================
+  // POLL NOT FOUND
+  // ========================================
 
   if (!poll) {
     return (
@@ -365,8 +466,11 @@ function PollPage() {
             </Link>
 
             <div className="live-badge">
+
               <span className="live-dot"></span>
+
               LIVE
+
             </div>
 
           </div>
@@ -375,25 +479,33 @@ function PollPage() {
 
         <main className="container">
 
-          <div className="error-card">
+          <section className="poll-page">
 
-            <h3>
-              ❌ Poll not found
-            </h3>
+            <div className="error-card">
 
-            <p>
-              {error ||
-                "This poll may have been deleted or does not exist."}
-            </p>
+              <div className="empty-icon">
+                📊
+              </div>
 
-            <Link
-              to="/"
-              className="view-button"
-            >
-              ← Back to Polls
-            </Link>
+              <h2>
+                Poll not found
+              </h2>
 
-          </div>
+              <p>
+                {error ||
+                  "This poll does not exist or has been deleted."}
+              </p>
+
+              <Link
+                to="/"
+                className="view-button"
+              >
+                ← Back to Polls
+              </Link>
+
+            </div>
+
+          </section>
 
         </main>
 
@@ -401,23 +513,19 @@ function PollPage() {
     );
   }
 
-  // --------------------------------------------------
-  // CALCULATE VOTES
-  // --------------------------------------------------
-
   const totalVotes =
     getTotalVotes();
 
-  // --------------------------------------------------
+  // ========================================
   // MAIN UI
-  // --------------------------------------------------
+  // ========================================
 
   return (
     <div className="app">
 
-      {/* ==============================================
-          NAVBAR
-      ============================================== */}
+      {/* ================================== */}
+      {/* NAVBAR */}
+      {/* ================================== */}
 
       <header className="navbar">
 
@@ -442,42 +550,40 @@ function PollPage() {
 
       </header>
 
-      {/* ==============================================
-          MAIN
-      ============================================== */}
+      {/* ================================== */}
+      {/* CONTENT */}
+      {/* ================================== */}
 
       <main className="container">
 
-        <div className="poll-page">
+        <section className="poll-page">
 
-          {/* BACK */}
+          {/* Back */}
 
           <Link
             to="/"
             className="back-link"
           >
-            ← Back to Polls
+            ← Back to all polls
           </Link>
 
-          {/* ============================================
-              POLL CARD
-          ============================================ */}
+          {/* ================================= */}
+          {/* POLL HEADER */}
+          {/* ================================= */}
 
-          <div className="poll-detail-card">
+          <div className="poll-detail-header">
 
-            {/* HEADER */}
+            <div className="poll-detail-meta">
 
-            <div className="poll-header">
-
-              <span className="poll-label">
+              <span className="live-label">
 
                 <span className="live-dot"></span>
 
-                LIVE POLL
+                LIVE
 
               </span>
 
-              <span className="vote-count">
+              <span>
                 👥 {totalVotes}{" "}
                 {totalVotes === 1
                   ? "vote"
@@ -486,188 +592,298 @@ function PollPage() {
 
             </div>
 
-            {/* QUESTION */}
-
             <h1>
               {poll.question}
             </h1>
 
-            <p className="poll-description">
-              Choose one option below.
-              Results update in real
-              time.
-            </p>
-
-            {/* =========================================
-                ERROR
-            ========================================= */}
-
-            {error && (
-              <div className="alert alert-error">
-                ❌ {error}
-              </div>
-            )}
-
-            {/* =========================================
-                SUCCESS
-            ========================================= */}
-
-            {success && (
-              <div className="alert alert-success">
-                {success}
-              </div>
-            )}
-
-            {/* =========================================
-                OPTIONS
-            ========================================= */}
-
-            <div className="options-list">
-
-              {Array.isArray(
-                poll.options
-              ) &&
-                poll.options.map(
-                  (option) => {
-
-                    const votes =
-                      Number(
-                        option.votes ||
-                          0
-                      );
-
-                    const percentage =
-                      totalVotes === 0
-                        ? 0
-                        : Math.round(
-                            (votes /
-                              totalVotes) *
-                              100
-                          );
-
-                    return (
-
-                      <button
-                        key={
-                          option.id
-                        }
-                        type="button"
-                        className={`option ${
-                          hasVoted
-                            ? "option-disabled"
-                            : ""
-                        }`}
-                        onClick={() =>
-                          vote(
-                            option.id
-                          )
-                        }
-                        disabled={
-                          hasVoted ||
-                          voting
-                        }
-                      >
-
-                        <div className="option-top">
-
-                          <span className="option-text">
-                            {
-                              option.text
-                            }
-                          </span>
-
-                          <span className="option-votes">
-                            {votes}{" "}
-                            {votes === 1
-                              ? "vote"
-                              : "votes"}
-                          </span>
-
-                        </div>
-
-                        <div className="progress-container">
-
-                          <div
-                            className="progress-bar"
-                            style={{
-                              width: `${percentage}%`,
-                            }}
-                          ></div>
-
-                        </div>
-
-                        <span className="percentage">
-                          {percentage}%
-                        </span>
-
-                      </button>
-
-                    );
-                  }
-                )}
-
-            </div>
-
-            {/* =========================================
-                VOTING STATUS
-            ========================================= */}
-
-            {voting && (
-              <div className="voting-status">
-
-                <div className="small-spinner"></div>
-
-                Recording your vote...
-
-              </div>
-            )}
-
-            {/* =========================================
-                ALREADY VOTED
-            ========================================= */}
-
-            {hasVoted && !voting && (
-
-              <div className="voted-message">
-
-                ✓ You have already
-                voted in this poll.
-
-              </div>
-
-            )}
-
-            {/* =========================================
-                SHARE
-            ========================================= */}
-
-            <div className="share-section">
-
-              <p>
-                Share this poll
+            {poll.createdAt && (
+              <p className="poll-date">
+                Created{" "}
+                {new Date(
+                  poll.createdAt
+                ).toLocaleString()}
               </p>
-
-              <button
-                type="button"
-                className="share-button"
-                onClick={
-                  sharePoll
-                }
-              >
-                🔗 Share Poll
-              </button>
-
-            </div>
+            )}
 
           </div>
 
-        </div>
+          {/* ================================= */}
+          {/* ALERTS */}
+          {/* ================================= */}
+
+          {error && (
+            <div className="alert alert-error">
+              ❌ {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="alert alert-success">
+              {success}
+            </div>
+          )}
+
+          {/* ================================= */}
+          {/* VOTING CARD */}
+          {/* ================================= */}
+
+          <section className="vote-card">
+
+            <div className="section-heading">
+
+              <div>
+
+                <span className="section-label">
+                  VOTE
+                </span>
+
+                <h2>
+                  Choose an option
+                </h2>
+
+                <p>
+                  Select one option and
+                  submit your vote.
+                </p>
+
+              </div>
+
+            </div>
+
+            {/* Options */}
+
+            <div className="poll-options">
+
+              {poll.options.map(
+                (option) => {
+
+                  const percentage =
+                    getPercentage(
+                      option.votes
+                    );
+
+                  const isSelected =
+                    selectedOption ===
+                    option.id;
+
+                  return (
+
+                    <button
+                      type="button"
+                      key={
+                        option.id
+                      }
+                      className={`poll-option ${
+                        isSelected
+                          ? "selected"
+                          : ""
+                      }`}
+                      onClick={() => {
+                        setSelectedOption(
+                          option.id
+                        );
+
+                        setError("");
+                      }}
+                      disabled={
+                        voting ||
+                        deleting
+                      }
+                    >
+
+                      <div className="option-content">
+
+                        <span className="option-radio">
+
+                          {isSelected && (
+                            <span className="radio-dot"></span>
+                          )}
+
+                        </span>
+
+                        <span className="option-text">
+                          {
+                            option.text
+                          }
+                        </span>
+
+                      </div>
+
+                      <span className="option-votes">
+                        {
+                          option.votes
+                        }
+                      </span>
+
+                    </button>
+
+                  );
+                }
+              )}
+
+            </div>
+
+            {/* Vote Button */}
+
+            <button
+              type="button"
+              className="create-button vote-submit"
+              onClick={vote}
+              disabled={
+                voting ||
+                deleting ||
+                !selectedOption
+              }
+            >
+
+              {voting
+                ? "Submitting Vote..."
+                : "Submit Vote →"}
+
+            </button>
+
+          </section>
+
+          {/* ================================= */}
+          {/* LIVE RESULTS */}
+          {/* ================================= */}
+
+          <section className="results-card">
+
+            <div className="section-heading">
+
+              <div>
+
+                <span className="section-label">
+                  RESULTS
+                </span>
+
+                <h2>
+                  Live Results
+                </h2>
+
+                <p>
+                  Results update
+                  automatically.
+                </p>
+
+              </div>
+
+              <div className="poll-count">
+                {totalVotes}{" "}
+                {totalVotes === 1
+                  ? "Vote"
+                  : "Votes"}
+              </div>
+
+            </div>
+
+            <div className="results-list">
+
+              {poll.options.map(
+                (option) => {
+
+                  const percentage =
+                    getPercentage(
+                      option.votes
+                    );
+
+                  return (
+
+                    <div
+                      className="result-item"
+                      key={
+                        option.id
+                      }
+                    >
+
+                      <div className="result-top">
+
+                        <span className="result-name">
+                          {
+                            option.text
+                          }
+                        </span>
+
+                        <span className="result-value">
+                          {
+                            option.votes
+                          }{" "}
+                          (
+                          {
+                            percentage
+                          }%)
+                        </span>
+
+                      </div>
+
+                      <div className="progress">
+
+                        <div
+                          className="progress-bar"
+                          style={{
+                            width: `${percentage}%`,
+                          }}
+                        ></div>
+
+                      </div>
+
+                    </div>
+
+                  );
+                }
+              )}
+
+            </div>
+
+          </section>
+
+          {/* ================================= */}
+          {/* ACTIONS */}
+          {/* ================================= */}
+
+          <section className="poll-page-actions">
+
+            <button
+              type="button"
+              className="share-button"
+              onClick={
+                sharePoll
+              }
+              disabled={
+                deleting
+              }
+            >
+              🔗 Share Poll
+            </button>
+
+            <button
+              type="button"
+              className="delete-button"
+              onClick={
+                deletePoll
+              }
+              disabled={
+                deleting ||
+                voting
+              }
+            >
+
+              {deleting
+                ? "Deleting..."
+                : "🗑️ Delete Poll"}
+
+            </button>
+
+          </section>
+
+        </section>
 
       </main>
 
-      {/* ==============================================
-          FOOTER
-      ============================================== */}
+      {/* ================================== */}
+      {/* FOOTER */}
+      {/* ================================== */}
 
       <footer className="footer">
 
