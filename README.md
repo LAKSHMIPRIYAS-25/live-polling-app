@@ -1,332 +1,550 @@
 # 🔴 Live Polling App
 
-> ⚡ A real-time polling platform where users can create polls, share them, vote, and watch results update live.
+> ⚡ A modern real-time polling application where users can create polls, share them, vote, and view live results without refreshing the page.
 
 ---
 
 ## ✨ Features
 
 - 📝 Create polls
-- ➕ Add multiple poll options
+- ➕ Add multiple options
+- 🔗 Shareable poll links
 - 🗳️ Vote on poll options
 - 🔒 One vote per user per poll
 - 📊 Live vote counts
 - 📈 Live vote percentages
 - ⚡ Real-time result updates
-- 🔗 Shareable poll links
-- 📱 Responsive user interface
-- 🎨 Modern and attractive UI
+- 📱 Responsive and attractive UI
 - 🛡️ Input validation
 - ❌ Error handling
-- 🍃 MongoDB data storage
-- ⚡ Redis/Memurai real-time messaging
-- 🚀 REST API using Go and Gin
-- 🔄 Server-Sent Events (SSE)
-- 🌐 CORS support
 
 ---
 
 ## 🛠️ Tech Stack
 
-**Frontend**
+### Frontend
 
-`React` · `Vite` · `JavaScript` · `CSS`
+- React
+- Vite
+- JavaScript
+- CSS
+- Fetch API
+- Server-Sent Events (SSE)
 
-**Backend**
+### Backend
 
-`Go` · `Gin`
+- Go
+- Gin Framework
+- REST API
 
-**Database**
+### Database
 
-`MongoDB`
+- MongoDB
 
-**Real-Time**
+### Real-Time Communication
 
-`Redis / Memurai` · `Server-Sent Events (SSE)`
+- Redis / Memurai
+- Server-Sent Events (SSE)
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Application Architecture
 
-```text
-                 ┌──────────────────┐
-                 │   React + Vite   │
-                 │    Frontend      │
-                 └────────┬─────────┘
-                          │
-                     REST API / SSE
+    ┌──────────────────────┐
+    │      React + Vite    │
+    │       Frontend       │
+    └──────────┬───────────┘
+               │
+               │ REST API / SSE
+               ▼
+    ┌──────────────────────┐
+    │       Go + Gin       │
+    │        Backend       │
+    └──────────┬───────────┘
+               │
+        ┌──────┴──────┐
+        │             │
+        ▼             ▼
+    ┌─────────┐   ┌──────────────┐
+    │ MongoDB │   │ Redis/Memurai│
+    │         │   │              │
+    │ Polls   │   │ Real-Time    │
+    │ Votes   │   │ Pub/Sub      │
+    └─────────┘   └──────┬───────┘
                           │
                           ▼
-                 ┌──────────────────┐
-                 │    Go + Gin      │
-                 │     Backend      │
-                 └───────┬──────────┘
+                    ┌──────────┐
+                    │   SSE    │
+                    └────┬─────┘
                          │
-                ┌────────┴────────┐
-                │                 │
-                ▼                 ▼
-        ┌──────────────┐   ┌──────────────┐
-        │   MongoDB    │   │ Redis/Memurai│
-        │ Poll & Votes │   │ Real-Time    │
-        └──────────────┘   └──────┬───────┘
-                                  │
-                                  ▼
-                         ┌────────────────┐
-                         │      SSE       │
-                         │ Live Updates   │
-                         └────────────────┘
+                         ▼
+                  Connected Users
+                         │
+                         ▼
+                   Live Results
 
 ---
 
 ## 📁 Project Structure
 
-```text
-live-polling-app/
-│
-├── backend/
-│   ├── config/
-│   │   ├── database.go
-│   │   ├── redis.go
-│   │   └── realtime.go
-│   │
-│   ├── controllers/
-│   │   ├── poll_controller.go
-│   │   └── realtime_controller.go
-│   │
-│   ├── models/
-│   │   └── poll.go
-│   │
-│   ├── routes/
-│   │   └── routes.go
-│   │
-│   ├── main.go
-│   ├── go.mod
-│   └── go.sum
-│
-├── frontend/
-│   ├── src/
-│   │   ├── App.jsx
-│   │   ├── App.css
-│   │   ├── PollPage.jsx
-│   │   ├── index.css
-│   │   └── main.jsx
-│   │
-│   ├── package.json
-│   └── package-lock.json
-│
-├── .gitignore
-└── README.md
+    live-polling-app/
+    │
+    ├── backend/
+    │   ├── config/
+    │   │   ├── database.go
+    │   │   ├── redis.go
+    │   │   └── realtime.go
+    │   │
+    │   ├── controllers/
+    │   │   ├── poll_controller.go
+    │   │   └── realtime_controller.go
+    │   │
+    │   ├── models/
+    │   │   └── poll.go
+    │   │
+    │   ├── routes/
+    │   │   └── routes.go
+    │   │
+    │   ├── main.go
+    │   ├── go.mod
+    │   └── go.sum
+    │
+    ├── frontend/
+    │   ├── src/
+    │   │   ├── App.jsx
+    │   │   ├── App.css
+    │   │   ├── PollPage.jsx
+    │   │   ├── index.css
+    │   │   └── main.jsx
+    │   │
+    │   ├── package.json
+    │   └── package-lock.json
+    │
+    ├── .gitignore
+    └── README.md
 
 ---
 
 ## ⚙️ Requirements
 
-Make sure the following are installed:
+Make sure the following are installed before running the project:
 
-Go
-Node.js
-npm
-MongoDB
-Redis or Memurai
+- Go
+- Node.js
+- npm
+- MongoDB
+- Redis or Memurai
 
-For Windows development, Memurai can be used as the Redis-compatible server.
+For Windows development, Memurai can be used as a Redis-compatible server.
 
 ---
 
 ## 🚀 Getting Started
 
-1. **Clone the Repository**
-git clone https://github.com/LAKSHMIPRIYAS-25/live-polling-app.git
-cd live-polling-app
+### 1. Clone the Repository
 
-2. **Start MongoDB**
+    git clone https://github.com/LAKSHMIPRIYAS-25/live-polling-app.git
+    cd live-polling-app
+
+### 2. Start MongoDB
 
 Make sure MongoDB is running on your system.
 
-3. **Start Redis / Memurai**
+### 3. Start Redis / Memurai
 
 For Memurai:
 
-memurai-cli ping
+    memurai-cli ping
 
 Expected response:
 
-PONG
-4. **Start Backend**
+    PONG
 
-Open Terminal 1:
+### 4. Start the Backend
 
-cd backend
-go mod tidy
-go run .
+Open a terminal:
+
+    cd backend
+    go mod tidy
+    go run .
 
 Backend runs at:
 
-http://localhost:8080
+    http://localhost:8080
 
-5. **Start Frontend**
+### 5. Start the Frontend
 
-Open Terminal 2:
+Open another terminal:
 
-cd frontend
-npm install
-npm run dev
+    cd frontend
+    npm install
+    npm run dev
 
 Frontend runs at:
 
-http://localhost:5173
+    http://localhost:5173
 
 Open the application in your browser:
 
-http://localhost:5173
+    http://localhost:5173
 
 ---
 
 ## 🔐 Environment Variables
 
-Create:
+Create the following file:
 
-frontend/.env
+    frontend/.env
 
 Add:
 
-VITE_API_URL=http://localhost:8080/api
+    VITE_API_URL=http://localhost:8080/api
 
-⚠️ Never commit passwords, API keys, or sensitive credentials to GitHub.
-
----
-
-## 🔌 API Endpoints
-
-| Method | Endpoint                        | Purpose                   |
-| :----: | ------------------------------- | ------------------------- |
-| `POST` | `/api/polls`                    | Create a poll             |
-|  `GET` | `/api/polls`                    | Get all polls             |
-|  `GET` | `/api/polls/:id`                | Get a specific poll       |
-| `POST` | `/api/polls/:id/vote/:optionId` | Submit a vote             |
-|  `GET` | `/api/polls/:id/stream`         | Receive real-time updates |
+Do not commit passwords, API keys, or other sensitive credentials to GitHub.
 
 ---
 
-⚡ Real-Time Voting
+## 🔌 API Documentation
 
-The application uses Redis/Memurai + Server-Sent Events (SSE) for live updates.
+### 1. Create Poll
 
-User votes
-    ↓
-React Frontend
-    ↓
-Go + Gin API
-    ↓
-MongoDB
-    ↓
-Redis / Memurai
-    ↓
-Server-Sent Events
-    ↓
-Connected Users
-    ↓
-Live Results Update
+Method:
 
-No manual page refresh is required
+    POST
+
+Endpoint:
+
+    /api/polls
+
+Description:
+
+Creates a new poll with multiple options.
+
+Example request:
+
+    POST /api/polls
+
+Example request body:
+
+    {
+      "question": "Which technology do you prefer?",
+      "options": [
+        {
+          "text": "React"
+        },
+        {
+          "text": "Vue"
+        },
+        {
+          "text": "Angular"
+        }
+      ]
+    }
+
+---
+
+### 2. Get All Polls
+
+Method:
+
+    GET
+
+Endpoint:
+
+    /api/polls
+
+Description:
+
+Returns all available polls.
+
+---
+
+### 3. Get Single Poll
+
+Method:
+
+    GET
+
+Endpoint:
+
+    /api/polls/:id
+
+Description:
+
+Returns details of a specific poll.
+
+Example:
+
+    GET /api/polls/6aac1580af40d571ae397c0d
+
+---
+
+### 4. Vote on Poll
+
+Method:
+
+    POST
+
+Endpoint:
+
+    /api/polls/:id/vote/:optionId
+
+Description:
+
+Records a vote for the selected option.
+
+Required header:
+
+    X-Voter-ID: unique-voter-id
+
+Example:
+
+    POST /api/polls/poll-id/vote/option-id
+
+---
+
+### 5. Real-Time Poll Stream
+
+Method:
+
+    GET
+
+Endpoint:
+
+    /api/polls/:id/stream
+
+Description:
+
+Provides real-time poll updates using Server-Sent Events.
+
+---
+
+## 📌 API Summary
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | /api/polls | Create a poll |
+| GET | /api/polls | Get all polls |
+| GET | /api/polls/:id | Get a specific poll |
+| POST | /api/polls/:id/vote/:optionId | Vote on an option |
+| GET | /api/polls/:id/stream | Real-time poll updates |
+
+---
+
+## ⚡ Real-Time Voting Flow
+
+    User
+      ↓
+    React Frontend
+      ↓
+    Go + Gin API
+      ↓
+    MongoDB
+      ↓
+    Redis / Memurai
+      ↓
+    Server-Sent Events
+      ↓
+    Connected Users
+      ↓
+    Live Results Update
+
+The voting results are updated automatically without manually refreshing the page.
 
 ---
 
 ## 🔒 Vote Protection
 
-A unique voter ID is stored in the browser's localStorage.
+The application uses a unique voter ID to prevent duplicate voting.
 
-The frontend sends:
+The voter ID is stored in the browser's localStorage.
 
-X-Voter-ID
+The frontend sends the voter ID using:
 
-with the vote request.
+    X-Voter-ID
 
-The backend validates the voter before recording the vote to prevent duplicate voting for the same poll.
+The backend validates the voter before recording the vote.
+
+If the same voter tries to vote again in the same poll, the vote is rejected.
 
 ---
 
-## 🧪 Testing
+## 🛡️ Input Validation
 
-**Poll Creation**
+The backend validates poll creation requests.
 
- Create a poll
- Add multiple options
- View created poll
- Share poll link
+Validation includes:
 
-**Voting**
+- Question is required
+- At least 2 options are required
+- Empty options are rejected
+- Invalid poll IDs are rejected
+- Invalid option IDs are rejected
+- Invalid voting requests are handled
 
- Select an option
- Submit vote
- Verify vote count
- Verify percentage
- Try duplicate voting
+---
 
-**Real-Time**
+## 🧪 Testing Checklist
 
- Open the same poll in two browser tabs
- Vote from one tab
- Verify the other tab updates automatically
- Confirm no page refresh is required
+### Poll Creation
+
+- [ ] Create a valid poll
+- [ ] Add multiple options
+- [ ] Verify poll is created
+- [ ] Verify poll appears in the poll list
+- [ ] Verify share link
+
+### Voting
+
+- [ ] Select an option
+- [ ] Submit a vote
+- [ ] Verify vote count
+- [ ] Verify percentage
+- [ ] Try voting again
+- [ ] Verify duplicate vote is rejected
+
+### Real-Time
+
+- [ ] Open the same poll in two browser tabs
+- [ ] Vote from the first tab
+- [ ] Verify the second tab updates automatically
+- [ ] Confirm no refresh is required
+
+### Error Handling
+
+- [ ] Test invalid poll ID
+- [ ] Test invalid option ID
+- [ ] Test invalid poll data
+- [ ] Check browser console
+- [ ] Check backend terminal
+
+---
 
 ## 📱 Responsive Design
 
-The application is designed for:
+The application is designed to work across:
 
-💻 Desktop
-💻 Laptop
-📱 Tablet
-📱 Mobile
+- 💻 Desktop
+- 💻 Laptop
+- 📱 Tablet
+- 📱 Mobile
 
-##🔮 Future Improvements
+The UI adapts to different screen sizes for a better user experience.
 
-User authentication
-User profiles
-Admin dashboard
-Poll expiration
-Advanced analytics
-Vote history
-Production deployment
-Automated testing
+---
+
+## 🎨 User Interface
+
+The application provides:
+
+- Modern landing page
+- Attractive poll creation interface
+- Interactive poll cards
+- Selectable voting options
+- Live result progress bars
+- Vote counts
+- Vote percentages
+- Loading states
+- Error messages
+- Success messages
+- Share functionality
+- Responsive layout
+
+---
+
+## 🔮 Future Improvements
+
+- User authentication
+- User registration and login
+- User profiles
+- Admin dashboard
+- Poll expiration
+- Advanced poll analytics
+- Vote history
+- Poll categories
+- Production deployment
+- Automated testing
+- API rate limiting
+
+---
 
 ## 📊 Project Highlights
 
-React + Vite
-     │
-     ├── Modern UI
-     ├── Responsive Design
-     └── Live Results
-            │
-            ▼
-        Go + Gin
-            │
-            ├── REST API
-            ├── Validation
-            └── Vote Protection
-            │
-       ┌────┴────┐
-       ▼         ▼
-   MongoDB   Redis/Memurai
-                 │
-                 ▼
-                SSE
-                 │
-                 ▼
-          Real-Time Updates
+    React + Vite
+          │
+          ├── Modern UI
+          ├── Responsive Design
+          └── Live Results
+                  │
+                  ▼
+              Go + Gin
+                  │
+                  ├── REST API
+                  ├── Validation
+                  └── Vote Protection
+                  │
+             ┌────┴────┐
+             ▼         ▼
+         MongoDB   Redis/Memurai
+                       │
+                       ▼
+                      SSE
+                       │
+                       ▼
+                Real-Time Updates
+
+---
+
+## ▶️ Running the Complete Application
+
+### Terminal 1 — Backend
+
+    cd backend
+    go run .
+
+### Terminal 2 — Frontend
+
+    cd frontend
+    npm run dev
+
+### Required Services
+
+    MongoDB
+    Redis / Memurai
+    Go Backend
+    React Frontend
+
+### Application
+
+    http://localhost:5173
+
+### Backend API
+
+    http://localhost:8080
+
+---
 
 ## 📄 License
 
 This project is created for learning and demonstration purposes.
 
-##👩‍💻 Author
+---
 
-**LakshmiPriya S**
+## 👩‍💻 Author
+
+### Lakshmi Priya
 
 **Live Polling App**
 
 Built with:
 
-React · Go · Gin · MongoDB · Redis/Memurai · SSE
+    React
+    Go
+    Gin
+    MongoDB
+    Redis / Memurai
+    Server-Sent Events
+
+---
 
 ⭐ If you find this project useful, consider giving it a star!
