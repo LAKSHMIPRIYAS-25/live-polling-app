@@ -7,7 +7,7 @@ import {
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "http://localhost:8080/api";
+  "https://live-polling-app-4.onrender.com/api";
 
 function PollPage() {
   const { id } = useParams();
