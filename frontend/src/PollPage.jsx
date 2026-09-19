@@ -5,8 +5,7 @@ import {
   useParams,
 } from "react-router-dom";
 
-const API_URL =
-  "https://live-polling-app-4.onrender.com/api";
+const API_URL ="https://live-polling-app-4.onrender.com/api";
 
 function PollPage() {
   const { id } = useParams();

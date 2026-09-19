@@ -7,8 +7,7 @@ import {
 
 import PollPage from "./PollPage";
 
-const API_URL =
-  "https://live-polling-app-4.onrender.com/api";
+const API_URL ="https://live-polling-app-4.onrender.com/api";
 
 // ========================================
 // HOME PAGE
