@@ -5,49 +5,76 @@ import {
   useParams,
 } from "react-router-dom";
 
-const API_URL ="https://live-polling-app-4.onrender.com/api";
+const API_URL =
+  "https://live-polling-app-4.onrender.com/api";
 
 function PollPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const [poll, setPoll] = useState(null);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [voting, setVoting] =
-    useState(false);
-
-  const [deleting, setDeleting] =
-    useState(false);
-
+  const [loading, setLoading] = useState(true);
+  const [voting, setVoting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [selectedOption, setSelectedOption] =
     useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  const [error, setError] =
-    useState("");
-
-  const [success, setSuccess] =
-    useState("");
+  // ========================================
+  // VOTER ID
+  // ========================================
 
   const [voterId] = useState(() => {
-    let id =
-      localStorage.getItem(
-        "voterId"
-      );
+    let savedId =
+      localStorage.getItem("voterId");
 
-    if (!id) {
-      id = crypto.randomUUID();
+    if (!savedId) {
+      savedId = crypto.randomUUID();
 
       localStorage.setItem(
         "voterId",
-        id
+        savedId
       );
     }
 
-    return id;
+    return savedId;
   });
+
+  // ========================================
+  // SAFE RESPONSE READER
+  // ========================================
+
+  const readResponse = async (response) => {
+    const text = await response.text();
+
+    console.log(
+      "API status:",
+      response.status
+    );
+
+    console.log(
+      "API response:",
+      text
+    );
+
+    if (!text || !text.trim()) {
+      return {};
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (err) {
+      console.error(
+        "Invalid JSON from server:",
+        text
+      );
+
+      return {
+        error: text,
+      };
+    }
+  };
 
   // ========================================
   // GET POLL
@@ -58,26 +85,32 @@ function PollPage() {
       setLoading(true);
       setError("");
 
-      const response =
-        await fetch(
-          `${API_URL}/polls/${id}`
-        );
+      const response = await fetch(
+        `${API_URL}/polls/${id}`
+      );
 
       const data =
-        await response.json();
+        await readResponse(response);
 
       if (!response.ok) {
         throw new Error(
           data.error ||
-            "Failed to load poll"
+            `Failed to load poll (${response.status})`
         );
       }
 
-      setPoll(
-        data.poll
-      );
+      if (!data.poll) {
+        throw new Error(
+          "Poll data was not returned by server."
+        );
+      }
+
+      setPoll(data.poll);
     } catch (err) {
-      console.error(err);
+      console.error(
+        "Fetch poll error:",
+        err
+      );
 
       setError(
         err.message ||
@@ -116,21 +149,23 @@ function PollPage() {
       "poll-update",
       (event) => {
         try {
+          if (!event.data) {
+            return;
+          }
+
           const payload =
-            JSON.parse(
-              event.data
-            );
+            JSON.parse(event.data);
 
           const data =
-            payload.data ??
-            payload;
+            payload?.data ?? payload;
 
-          // Poll deleted
+          // ==================================
+          // POLL DELETED
+          // ==================================
+
           if (
-            data?.type ===
-              "deleted" ||
-            payload?.type ===
-              "deleted"
+            data?.type === "deleted" ||
+            payload?.type === "deleted"
           ) {
             setPoll(null);
 
@@ -143,7 +178,11 @@ function PollPage() {
             return;
           }
 
-          if (data) {
+          // ==================================
+          // POLL UPDATED
+          // ==================================
+
+          if (data?.question) {
             setPoll(data);
           }
         } catch (err) {
@@ -156,10 +195,8 @@ function PollPage() {
     );
 
     eventSource.onerror = () => {
-      // Do not show an error immediately.
-      // Browser EventSource automatically retries.
       console.log(
-        "Real-time connection interrupted."
+        "Real-time connection interrupted. Retrying..."
       );
     };
 
@@ -207,19 +244,22 @@ function PollPage() {
         );
 
       const data =
-        await response.json();
+        await readResponse(response);
 
       if (!response.ok) {
         throw new Error(
           data.error ||
-            "Unable to submit vote."
+            `Unable to submit vote (${response.status})`
         );
       }
 
+      // Backend returned updated poll
       if (data.poll) {
-        setPoll(
-          data.poll
-        );
+        setPoll(data.poll);
+      } else {
+        // If backend gives empty response,
+        // reload poll from server.
+        await fetchPoll();
       }
 
       setSuccess(
@@ -251,7 +291,7 @@ function PollPage() {
   // ========================================
 
   const deletePoll = async () => {
-    if (!poll) {
+    if (!poll || !id) {
       return;
     }
 
@@ -269,6 +309,11 @@ function PollPage() {
       setError("");
       setSuccess("");
 
+      console.log(
+        "Deleting poll:",
+        id
+      );
+
       const response =
         await fetch(
           `${API_URL}/polls/${id}`,
@@ -278,25 +323,38 @@ function PollPage() {
         );
 
       const data =
-        await response.json();
+        await readResponse(response);
+
+      console.log(
+        "Delete response:",
+        response.status,
+        data
+      );
 
       if (!response.ok) {
         throw new Error(
           data.error ||
-            "Failed to delete poll."
+            `Failed to delete poll (${response.status})`
         );
       }
+
+      // ==================================
+      // DELETE SUCCESS
+      // ==================================
+
+      setPoll(null);
 
       setSuccess(
         "✓ Poll deleted successfully!"
       );
 
+      // Go back to home
       setTimeout(() => {
         navigate("/");
       }, 700);
     } catch (err) {
       console.error(
-        "Delete error:",
+        "Delete poll error:",
         err
       );
 
@@ -310,10 +368,14 @@ function PollPage() {
   };
 
   // ========================================
-  // SHARE
+  // SHARE POLL
   // ========================================
 
   const sharePoll = async () => {
+    if (!poll) {
+      return;
+    }
+
     const shareUrl =
       window.location.href;
 
@@ -323,7 +385,7 @@ function PollPage() {
       ) {
         await navigator.share({
           title:
-            poll?.question ||
+            poll.question ||
             "Live Poll",
 
           text:
@@ -331,7 +393,9 @@ function PollPage() {
 
           url: shareUrl,
         });
-      } else {
+      } else if (
+        navigator.clipboard
+      ) {
         await navigator.clipboard.writeText(
           shareUrl
         );
@@ -343,6 +407,11 @@ function PollPage() {
         setTimeout(() => {
           setSuccess("");
         }, 2500);
+      } else {
+        setSuccess(
+          "Copy this link: " +
+            shareUrl
+        );
       }
     } catch (err) {
       console.log(
@@ -357,7 +426,12 @@ function PollPage() {
   // ========================================
 
   const getTotalVotes = () => {
-    if (!poll?.options) {
+    if (
+      !poll ||
+      !Array.isArray(
+        poll.options
+      )
+    ) {
       return 0;
     }
 
@@ -445,7 +519,7 @@ function PollPage() {
   }
 
   // ========================================
-  // POLL NOT FOUND
+  // POLL NOT FOUND / DELETED
   // ========================================
 
   if (!poll) {
@@ -511,6 +585,10 @@ function PollPage() {
     );
   }
 
+  // ========================================
+  // TOTAL VOTES
+  // ========================================
+
   const totalVotes =
     getTotalVotes();
 
@@ -556,7 +634,7 @@ function PollPage() {
 
         <section className="poll-page">
 
-          {/* Back */}
+          {/* BACK */}
 
           <Link
             to="/"
@@ -648,80 +726,81 @@ function PollPage() {
 
             </div>
 
-            {/* Options */}
+            {/* OPTIONS */}
 
             <div className="poll-options">
 
-              {poll.options.map(
-                (option) => {
+              {Array.isArray(
+                poll.options
+              ) &&
+                poll.options.map(
+                  (option) => {
 
-                  const percentage =
-                    getPercentage(
-                      option.votes
-                    );
+                    const percentage =
+                      getPercentage(
+                        option.votes
+                      );
 
-                  const isSelected =
-                    selectedOption ===
-                    option.id;
+                    const isSelected =
+                      selectedOption ===
+                      option.id;
 
-                  return (
-
-                    <button
-                      type="button"
-                      key={
-                        option.id
-                      }
-                      className={`poll-option ${
-                        isSelected
-                          ? "selected"
-                          : ""
-                      }`}
-                      onClick={() => {
-                        setSelectedOption(
+                    return (
+                      <button
+                        type="button"
+                        key={
                           option.id
-                        );
+                        }
+                        className={`poll-option ${
+                          isSelected
+                            ? "selected"
+                            : ""
+                        }`}
+                        onClick={() => {
+                          setSelectedOption(
+                            option.id
+                          );
 
-                        setError("");
-                      }}
-                      disabled={
-                        voting ||
-                        deleting
-                      }
-                    >
+                          setError("");
+                        }}
+                        disabled={
+                          voting ||
+                          deleting
+                        }
+                      >
 
-                      <div className="option-content">
+                        <div className="option-content">
 
-                        <span className="option-radio">
+                          <span className="option-radio">
 
-                          {isSelected && (
-                            <span className="radio-dot"></span>
-                          )}
+                            {isSelected && (
+                              <span className="radio-dot"></span>
+                            )}
 
-                        </span>
+                          </span>
 
-                        <span className="option-text">
+                          <span className="option-text">
+                            {
+                              option.text
+                            }
+                          </span>
+
+                        </div>
+
+                        <span className="option-votes">
                           {
-                            option.text
+                            option.votes
                           }
                         </span>
 
-                      </div>
-
-                      <span className="option-votes">
-                        {
-                          option.votes
-                        }
-                      </span>
-
-                    </button>
-
-                  );
-                }
-              )}
+                      </button>
+                    );
+                  }
+                )}
 
             </div>
 
-            {/* Vote Button */}
+            {/* VOTE BUTTON */}
 
             <button
               type="button"
@@ -778,59 +857,60 @@ function PollPage() {
 
             <div className="results-list">
 
-              {poll.options.map(
-                (option) => {
+              {Array.isArray(
+                poll.options
+              ) &&
+                poll.options.map(
+                  (option) => {
 
-                  const percentage =
-                    getPercentage(
-                      option.votes
+                    const percentage =
+                      getPercentage(
+                        option.votes
+                      );
+
+                    return (
+                      <div
+                        className="result-item"
+                        key={
+                          option.id
+                        }
+                      >
+
+                        <div className="result-top">
+
+                          <span className="result-name">
+                            {
+                              option.text
+                            }
+                          </span>
+
+                          <span className="result-value">
+                            {
+                              option.votes
+                            }{" "}
+                            (
+                            {
+                              percentage
+                            }%)
+                          </span>
+
+                        </div>
+
+                        <div className="progress">
+
+                          <div
+                            className="progress-bar"
+                            style={{
+                              width: `${percentage}%`,
+                            }}
+                          ></div>
+
+                        </div>
+
+                      </div>
                     );
-
-                  return (
-
-                    <div
-                      className="result-item"
-                      key={
-                        option.id
-                      }
-                    >
-
-                      <div className="result-top">
-
-                        <span className="result-name">
-                          {
-                            option.text
-                          }
-                        </span>
-
-                        <span className="result-value">
-                          {
-                            option.votes
-                          }{" "}
-                          (
-                          {
-                            percentage
-                          }%)
-                        </span>
-
-                      </div>
-
-                      <div className="progress">
-
-                        <div
-                          className="progress-bar"
-                          style={{
-                            width: `${percentage}%`,
-                          }}
-                        ></div>
-
-                      </div>
-
-                    </div>
-
-                  );
-                }
-              )}
+                  }
+                )}
 
             </div>
 
