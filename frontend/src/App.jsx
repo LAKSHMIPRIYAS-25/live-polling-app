@@ -651,23 +651,18 @@ function HomePage() {
 
   const sharePoll = async (pollId) => {
     if (!pollId) {
+      setError("Invalid poll ID.");
       return;
     }
 
     const shareUrl =
-      `${window.location.origin}/live-polling-app/poll/${pollId}`;
+      `${window.location.origin}/live-polling-app/#/poll/${pollId}`;
 
     try {
-      if (
-        navigator.share
-      ) {
+      if (navigator.share) {
         await navigator.share({
-          title:
-            "Live Poll",
-
-          text:
-            "Vote in this live poll!",
-
+          title: "Live Poll",
+          text: "Vote in this live poll!",
           url: shareUrl,
         });
       } else {
