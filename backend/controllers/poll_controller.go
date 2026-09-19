@@ -2,16 +2,47 @@ package controllers
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"live-polling-backend/config"
 	"live-polling-backend/models"
 )
+
+// ========================================
+// SAFE REDIS PUBLISH
+// ========================================
+
+// safePublishPollUpdate prevents Redis publish
+// problems from breaking the HTTP response.
+func safePublishPollUpdate(
+	pollID string,
+	data interface{},
+) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println(
+				"Redis publish panic:",
+				r,
+			)
+		}
+	}()
+
+	config.PublishPollUpdate(
+		pollID,
+		data,
+	)
+}
+
+// ========================================
+// CREATE POLL
+// ========================================
 
 // CreatePoll creates a new poll.
 func CreatePoll(c *gin.Context) {
@@ -24,11 +55,28 @@ func CreatePoll(c *gin.Context) {
 		return
 	}
 
-	poll.Question = strings.TrimSpace(poll.Question)
+	// Clean question.
+	poll.Question = strings.TrimSpace(
+		poll.Question,
+	)
 
 	if poll.Question == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Poll question is required",
+		})
+		return
+	}
+
+	if len(poll.Question) < 3 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Poll question must be at least 3 characters",
+		})
+		return
+	}
+
+	if len(poll.Question) > 200 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Poll question must not exceed 200 characters",
 		})
 		return
 	}
@@ -47,19 +95,42 @@ func CreatePoll(c *gin.Context) {
 		return
 	}
 
-	// Clean and validate options.
-	cleanOptions := make([]models.PollOption, 0)
+	// ========================================
+	// CLEAN OPTIONS
+	// ========================================
 
-	seen := make(map[string]bool)
+	cleanOptions := make(
+		[]models.PollOption,
+		0,
+		len(poll.Options),
+	)
+
+	seen := make(
+		map[string]bool,
+	)
 
 	for _, option := range poll.Options {
-		option.Text = strings.TrimSpace(option.Text)
+		option.Text = strings.TrimSpace(
+			option.Text,
+		)
 
 		if option.Text == "" {
-			continue
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "All options are required",
+			})
+			return
 		}
 
-		key := strings.ToLower(option.Text)
+		if len(option.Text) > 100 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Option text must not exceed 100 characters",
+			})
+			return
+		}
+
+		key := strings.ToLower(
+			option.Text,
+		)
 
 		if seen[key] {
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -86,12 +157,23 @@ func CreatePoll(c *gin.Context) {
 		return
 	}
 
-	poll.ID = bson.NewObjectID()
-	poll.Options = cleanOptions
-	poll.Voters = []string{}
-	poll.CreatedAt = time.Now().Format(time.RFC3339)
+	// ========================================
+	// CREATE POLL OBJECT
+	// ========================================
 
-	collection := config.DB.Collection("polls")
+	poll.ID = bson.NewObjectID()
+
+	poll.Options = cleanOptions
+
+	poll.Voters = []string{}
+
+	poll.CreatedAt = time.Now().
+		UTC().
+		Format(time.RFC3339)
+
+	collection := config.DB.Collection(
+		"polls",
+	)
 
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
@@ -105,11 +187,20 @@ func CreatePoll(c *gin.Context) {
 	)
 
 	if err != nil {
+		log.Println(
+			"Create poll error:",
+			err,
+		)
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to create poll",
 		})
 		return
 	}
+
+	// ========================================
+	// RESPONSE
+	// ========================================
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Poll created successfully",
@@ -117,9 +208,15 @@ func CreatePoll(c *gin.Context) {
 	})
 }
 
+// ========================================
+// GET ALL POLLS
+// ========================================
+
 // GetPolls returns all polls.
 func GetPolls(c *gin.Context) {
-	collection := config.DB.Collection("polls")
+	collection := config.DB.Collection(
+		"polls",
+	)
 
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
@@ -133,6 +230,11 @@ func GetPolls(c *gin.Context) {
 	)
 
 	if err != nil {
+		log.Println(
+			"Get polls error:",
+			err,
+		)
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to fetch polls",
 		})
@@ -150,6 +252,11 @@ func GetPolls(c *gin.Context) {
 		ctx,
 		&polls,
 	); err != nil {
+		log.Println(
+			"Decode polls error:",
+			err,
+		)
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to decode polls",
 		})
@@ -161,11 +268,17 @@ func GetPolls(c *gin.Context) {
 	})
 }
 
+// ========================================
+// GET ONE POLL
+// ========================================
+
 // GetPoll returns one poll by ID.
 func GetPoll(c *gin.Context) {
 	id := c.Param("id")
 
-	objectID, err := bson.ObjectIDFromHex(id)
+	objectID, err := bson.ObjectIDFromHex(
+		id,
+	)
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -174,7 +287,9 @@ func GetPoll(c *gin.Context) {
 		return
 	}
 
-	collection := config.DB.Collection("polls")
+	collection := config.DB.Collection(
+		"polls",
+	)
 
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
@@ -192,8 +307,20 @@ func GetPoll(c *gin.Context) {
 	).Decode(&poll)
 
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "Poll not found",
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "Poll not found",
+			})
+			return
+		}
+
+		log.Println(
+			"Get poll error:",
+			err,
+		)
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to fetch poll",
 		})
 		return
 	}
@@ -203,12 +330,20 @@ func GetPoll(c *gin.Context) {
 	})
 }
 
+// ========================================
+// VOTE POLL
+// ========================================
+
 // VotePoll records one vote for a poll option.
 func VotePoll(c *gin.Context) {
 	pollID := c.Param("id")
+
 	optionID := c.Param("optionId")
 
-	// Read voter ID sent by frontend.
+	// ========================================
+	// VOTER ID
+	// ========================================
+
 	voterID := strings.TrimSpace(
 		c.GetHeader("X-Voter-ID"),
 	)
@@ -219,6 +354,10 @@ func VotePoll(c *gin.Context) {
 		})
 		return
 	}
+
+	// ========================================
+	// POLL ID
+	// ========================================
 
 	objectID, err := bson.ObjectIDFromHex(
 		pollID,
@@ -231,7 +370,9 @@ func VotePoll(c *gin.Context) {
 		return
 	}
 
-	collection := config.DB.Collection("polls")
+	collection := config.DB.Collection(
+		"polls",
+	)
 
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
@@ -239,7 +380,10 @@ func VotePoll(c *gin.Context) {
 	)
 	defer cancel()
 
-	// Get the poll first.
+	// ========================================
+	// GET POLL
+	// ========================================
+
 	var poll models.Poll
 
 	err = collection.FindOne(
@@ -250,13 +394,28 @@ func VotePoll(c *gin.Context) {
 	).Decode(&poll)
 
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "Poll not found",
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "Poll not found",
+			})
+			return
+		}
+
+		log.Println(
+			"Find poll for vote error:",
+			err,
+		)
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to fetch poll",
 		})
 		return
 	}
 
-	// Check whether this option exists.
+	// ========================================
+	// CHECK OPTION
+	// ========================================
+
 	optionExists := false
 
 	for _, option := range poll.Options {
@@ -273,7 +432,10 @@ func VotePoll(c *gin.Context) {
 		return
 	}
 
-	// Check whether this voter has already voted.
+	// ========================================
+	// CHECK DUPLICATE VOTE
+	// ========================================
+
 	for _, existingVoter := range poll.Voters {
 		if existingVoter == voterID {
 			c.JSON(http.StatusConflict, gin.H{
@@ -283,15 +445,17 @@ func VotePoll(c *gin.Context) {
 		}
 	}
 
-	// Atomically:
-	// 1. Check voter is not already present.
-	// 2. Add voter ID.
-	// 3. Increase selected option vote count.
+	// ========================================
+	// ATOMIC UPDATE
+	// ========================================
+
 	filter := bson.M{
 		"_id": objectID,
+
 		"voters": bson.M{
 			"$ne": voterID,
 		},
+
 		"options": bson.M{
 			"$elemMatch": bson.M{
 				"id": optionID,
@@ -303,6 +467,7 @@ func VotePoll(c *gin.Context) {
 		"$inc": bson.M{
 			"options.$.votes": 1,
 		},
+
 		"$addToSet": bson.M{
 			"voters": voterID,
 		},
@@ -315,6 +480,11 @@ func VotePoll(c *gin.Context) {
 	)
 
 	if err != nil {
+		log.Println(
+			"Vote update error:",
+			err,
+		)
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to record vote",
 		})
@@ -322,7 +492,7 @@ func VotePoll(c *gin.Context) {
 	}
 
 	if result.MatchedCount == 0 {
-		// Re-check if the voter already voted.
+		// Check current poll again.
 		var currentPoll models.Poll
 
 		err := collection.FindOne(
@@ -334,6 +504,7 @@ func VotePoll(c *gin.Context) {
 
 		if err == nil {
 			for _, existingVoter := range currentPoll.Voters {
+
 				if existingVoter == voterID {
 					c.JSON(http.StatusConflict, gin.H{
 						"error": "You have already voted in this poll",
@@ -349,7 +520,10 @@ func VotePoll(c *gin.Context) {
 		return
 	}
 
-	// Fetch the updated poll.
+	// ========================================
+	// GET UPDATED POLL
+	// ========================================
+
 	var updatedPoll models.Poll
 
 	err = collection.FindOne(
@@ -360,17 +534,29 @@ func VotePoll(c *gin.Context) {
 	).Decode(&updatedPoll)
 
 	if err != nil {
+		log.Println(
+			"Fetch updated poll error:",
+			err,
+		)
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Vote recorded but failed to fetch updated poll",
 		})
 		return
 	}
 
-	// Publish real-time update through Redis.
-	config.PublishPollUpdate(
+	// ========================================
+	// REDIS REAL-TIME UPDATE
+	// ========================================
+
+	safePublishPollUpdate(
 		pollID,
 		updatedPoll,
 	)
+
+	// ========================================
+	// RESPONSE
+	// ========================================
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Vote recorded successfully",
@@ -378,9 +564,17 @@ func VotePoll(c *gin.Context) {
 	})
 }
 
+// ========================================
+// DELETE POLL
+// ========================================
+
 // DeletePoll deletes a poll.
 func DeletePoll(c *gin.Context) {
 	id := c.Param("id")
+
+	// ========================================
+	// VALIDATE ID
+	// ========================================
 
 	objectID, err := bson.ObjectIDFromHex(
 		id,
@@ -393,7 +587,17 @@ func DeletePoll(c *gin.Context) {
 		return
 	}
 
-	collection := config.DB.Collection("polls")
+	// ========================================
+	// MONGODB COLLECTION
+	// ========================================
+
+	collection := config.DB.Collection(
+		"polls",
+	)
+
+	// ========================================
+	// CONTEXT
+	// ========================================
 
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
@@ -401,8 +605,10 @@ func DeletePoll(c *gin.Context) {
 	)
 	defer cancel()
 
-	// Get poll before deleting so we can
-	// publish the deleted event.
+	// ========================================
+	// CHECK POLL EXISTS
+	// ========================================
+
 	var poll models.Poll
 
 	err = collection.FindOne(
@@ -413,13 +619,28 @@ func DeletePoll(c *gin.Context) {
 	).Decode(&poll)
 
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "Poll not found",
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "Poll not found",
+			})
+			return
+		}
+
+		log.Println(
+			"Find poll before delete error:",
+			err,
+		)
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to find poll",
 		})
 		return
 	}
 
-	// Delete the poll.
+	// ========================================
+	// DELETE FROM MONGODB
+	// ========================================
+
 	result, err := collection.DeleteOne(
 		ctx,
 		bson.M{
@@ -428,6 +649,11 @@ func DeletePoll(c *gin.Context) {
 	)
 
 	if err != nil {
+		log.Println(
+			"Delete poll error:",
+			err,
+		)
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to delete poll",
 		})
@@ -441,8 +667,23 @@ func DeletePoll(c *gin.Context) {
 		return
 	}
 
-	// Publish delete event through Redis.
-	config.PublishPollUpdate(
+	// ========================================
+	// REDIS DELETE EVENT
+	// ========================================
+	//
+	// IMPORTANT:
+	// MongoDB deletion has already succeeded.
+	//
+	// If Redis fails, we DON'T return 500.
+	//
+	// This prevents:
+	//
+	// "Failed to delete poll (500)"
+	//
+	// after the poll has actually been deleted.
+	//
+
+	safePublishPollUpdate(
 		id,
 		map[string]interface{}{
 			"type":   "deleted",
@@ -450,7 +691,12 @@ func DeletePoll(c *gin.Context) {
 		},
 	)
 
+	// ========================================
+	// SUCCESS RESPONSE
+	// ========================================
+
 	c.JSON(http.StatusOK, gin.H{
+		"success": true,
 		"message": "Poll deleted successfully",
 		"pollId":  id,
 	})
