@@ -7,7 +7,8 @@ import {
 
 import PollPage from "./PollPage";
 
-const API_URL ="https://live-polling-app-4.onrender.com/api";
+const API_URL =
+  "https://live-polling-app-4.onrender.com/api";
 
 // ========================================
 // HOME PAGE
@@ -16,54 +17,93 @@ const API_URL ="https://live-polling-app-4.onrender.com/api";
 function HomePage() {
   const [polls, setPolls] = useState([]);
 
-  const [question, setQuestion] =
-    useState("");
+  const [question, setQuestion] = useState("");
 
   const [options, setOptions] = useState([
     "",
     "",
   ]);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
 
-  const [creating, setCreating] =
-    useState(false);
+  const [creating, setCreating] = useState(false);
 
-  const [deleting, setDeleting] =
-    useState({});
+  const [deleting, setDeleting] = useState({});
 
-  const [error, setError] =
-    useState("");
+  const [error, setError] = useState("");
 
-  const [success, setSuccess] =
-    useState("");
+  const [success, setSuccess] = useState("");
 
-  // ----------------------------------------
-  // Voter ID
-  // ----------------------------------------
+  // ========================================
+  // VOTER ID
+  // ========================================
 
   const [voterId] = useState(() => {
-    let id =
-      localStorage.getItem(
-        "voterId"
-      );
+    let id = localStorage.getItem("voterId");
 
     if (!id) {
       id = crypto.randomUUID();
 
-      localStorage.setItem(
-        "voterId",
-        id
-      );
+      localStorage.setItem("voterId", id);
     }
 
     return id;
   });
 
-  // ----------------------------------------
-  // Fetch polls
-  // ----------------------------------------
+  // Prevent unused variable warning
+  console.log("Voter ID:", voterId);
+
+  // ========================================
+  // GET POLL ID
+  // ========================================
+
+  const getPollId = (poll) => {
+    if (!poll) {
+      return null;
+    }
+
+    // Backend JSON normally returns "id"
+    if (poll.id) {
+      return String(poll.id);
+    }
+
+    // Fallback
+    if (poll._id) {
+      if (typeof poll._id === "string") {
+        return poll._id;
+      }
+
+      if (poll._id.$oid) {
+        return poll._id.$oid;
+      }
+    }
+
+    return null;
+  };
+
+  // ========================================
+  // SAFE JSON READER
+  // ========================================
+
+  const readResponse = async (response) => {
+    const text = await response.text();
+
+    if (!text) {
+      return {};
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      return {
+        error: text,
+      };
+    }
+  };
+
+  // ========================================
+  // FETCH POLLS
+  // ========================================
 
   const fetchPolls = async () => {
     try {
@@ -75,7 +115,7 @@ function HomePage() {
       );
 
       const data =
-        await response.json();
+        await readResponse(response);
 
       if (!response.ok) {
         throw new Error(
@@ -84,9 +124,16 @@ function HomePage() {
         );
       }
 
-      setPolls(data.polls || []);
+      setPolls(
+        Array.isArray(data.polls)
+          ? data.polls
+          : []
+      );
     } catch (err) {
-      console.error(err);
+      console.error(
+        "Fetch polls error:",
+        err
+      );
 
       setError(
         err.message ||
@@ -97,13 +144,17 @@ function HomePage() {
     }
   };
 
+  // ========================================
+  // INITIAL LOAD
+  // ========================================
+
   useEffect(() => {
     fetchPolls();
   }, []);
 
-  // ----------------------------------------
-  // Real-time updates
-  // ----------------------------------------
+  // ========================================
+  // REAL-TIME UPDATES
+  // ========================================
 
   useEffect(() => {
     if (polls.length === 0) {
@@ -114,7 +165,7 @@ function HomePage() {
 
     polls.forEach((poll) => {
       const pollId =
-        poll.id || poll._id;
+        getPollId(poll);
 
       if (!pollId) {
         return;
@@ -130,12 +181,15 @@ function HomePage() {
         (event) => {
           try {
             const payload =
-              JSON.parse(event.data);
+              JSON.parse(
+                event.data
+              );
 
             const updatedPoll =
-              payload.data ?? payload;
+              payload.data ??
+              payload;
 
-            // Deleted poll event
+            // Poll deleted
             if (
               updatedPoll?.type ===
                 "deleted" ||
@@ -143,17 +197,20 @@ function HomePage() {
                 "deleted"
             ) {
               const deletedId =
-                updatedPoll?.pollId ||
-                payload?.pollId ||
-                pollId;
+                String(
+                  updatedPoll?.pollId ||
+                    payload?.pollId ||
+                    pollId
+                );
 
               setPolls(
                 (currentPolls) =>
                   currentPolls.filter(
                     (existingPoll) => {
                       const existingId =
-                        existingPoll.id ||
-                        existingPoll._id;
+                        getPollId(
+                          existingPoll
+                        );
 
                       return (
                         existingId !==
@@ -166,25 +223,29 @@ function HomePage() {
               return;
             }
 
-            setPolls(
-              (currentPolls) =>
-                currentPolls.map(
-                  (existingPoll) => {
-                    const existingId =
-                      existingPoll.id ||
-                      existingPoll._id;
+            // Poll updated
+            if (updatedPoll) {
+              setPolls(
+                (currentPolls) =>
+                  currentPolls.map(
+                    (existingPoll) => {
+                      const existingId =
+                        getPollId(
+                          existingPoll
+                        );
 
-                    if (
-                      existingId ===
-                      pollId
-                    ) {
-                      return updatedPoll;
+                      if (
+                        existingId ===
+                        pollId
+                      ) {
+                        return updatedPoll;
+                      }
+
+                      return existingPoll;
                     }
-
-                    return existingPoll;
-                  }
-                )
-            );
+                  )
+              );
+            }
           } catch (err) {
             console.error(
               "Live update error:",
@@ -194,6 +255,12 @@ function HomePage() {
         }
       );
 
+      eventSource.onerror = () => {
+        console.log(
+          "Real-time connection interrupted."
+        );
+      };
+
       connections.push(
         eventSource
       );
@@ -201,15 +268,16 @@ function HomePage() {
 
     return () => {
       connections.forEach(
-        (connection) =>
-          connection.close()
+        (connection) => {
+          connection.close();
+        }
       );
     };
   }, [polls.length]);
 
-  // ----------------------------------------
-  // Add option
-  // ----------------------------------------
+  // ========================================
+  // ADD OPTION
+  // ========================================
 
   const addOption = () => {
     if (options.length >= 10) {
@@ -228,13 +296,11 @@ function HomePage() {
     setError("");
   };
 
-  // ----------------------------------------
-  // Remove option
-  // ----------------------------------------
+  // ========================================
+  // REMOVE OPTION
+  // ========================================
 
-  const removeOption = (
-    index
-  ) => {
+  const removeOption = (index) => {
     if (options.length <= 2) {
       setError(
         "At least 2 options are required."
@@ -252,45 +318,40 @@ function HomePage() {
     setError("");
   };
 
-  // ----------------------------------------
-  // Update option
-  // ----------------------------------------
+  // ========================================
+  // UPDATE OPTION
+  // ========================================
 
   const updateOption = (
     index,
     value
   ) => {
-    const updatedOptions = [
-      ...options,
-    ];
-
-    updatedOptions[index] =
-      value;
-
     setOptions(
-      updatedOptions
+      options.map(
+        (option, i) =>
+          i === index
+            ? value
+            : option
+      )
     );
 
     setError("");
   };
 
-  // ----------------------------------------
-  // Create poll
-  // ----------------------------------------
+  // ========================================
+  // CREATE POLL
+  // ========================================
 
-  const createPoll = async (
-    event
-  ) => {
+  const createPoll = async (event) => {
     event.preventDefault();
 
     setError("");
     setSuccess("");
 
-    // Question validation
-
     const cleanQuestion =
       question.trim();
 
+    // Question validation
     if (!cleanQuestion) {
       setError(
         "Question is required."
@@ -299,9 +360,7 @@ function HomePage() {
       return;
     }
 
-    if (
-      cleanQuestion.length < 3
-    ) {
+    if (cleanQuestion.length < 3) {
       setError(
         "Question must be at least 3 characters."
       );
@@ -309,9 +368,7 @@ function HomePage() {
       return;
     }
 
-    if (
-      cleanQuestion.length > 200
-    ) {
+    if (cleanQuestion.length > 200) {
       setError(
         "Question must not exceed 200 characters."
       );
@@ -319,16 +376,13 @@ function HomePage() {
       return;
     }
 
-    // Option validation
-
+    // Options
     const cleanOptions =
       options.map((option) =>
         option.trim()
       );
 
-    if (
-      cleanOptions.length < 2
-    ) {
+    if (cleanOptions.length < 2) {
       setError(
         "At least 2 options are required."
       );
@@ -349,7 +403,6 @@ function HomePage() {
     }
 
     // Duplicate validation
-
     const normalizedOptions =
       cleanOptions.map(
         (option) =>
@@ -399,7 +452,9 @@ function HomePage() {
         );
 
       const data =
-        await response.json();
+        await readResponse(
+          response
+        );
 
       if (!response.ok) {
         throw new Error(
@@ -408,7 +463,11 @@ function HomePage() {
         );
       }
 
-      // Add new poll to top
+      if (!data.poll) {
+        throw new Error(
+          "Poll was created but server did not return poll data."
+        );
+      }
 
       setPolls(
         (currentPolls) => [
@@ -416,8 +475,6 @@ function HomePage() {
           ...currentPolls,
         ]
       );
-
-      // Reset form
 
       setQuestion("");
 
@@ -434,7 +491,10 @@ function HomePage() {
         setSuccess("");
       }, 3000);
     } catch (err) {
-      console.error(err);
+      console.error(
+        "Create poll error:",
+        err
+      );
 
       setError(
         err.message ||
@@ -445,13 +505,11 @@ function HomePage() {
     }
   };
 
-  // ----------------------------------------
-  // Delete poll
-  // ----------------------------------------
+  // ========================================
+  // DELETE POLL
+  // ========================================
 
-  const deletePoll = async (
-    pollId
-  ) => {
+  const deletePoll = async (pollId) => {
     if (!pollId) {
       setError(
         "Invalid poll ID."
@@ -480,36 +538,65 @@ function HomePage() {
       setError("");
       setSuccess("");
 
+      console.log(
+        "Deleting poll:",
+        pollId
+      );
+
       const response =
         await fetch(
           `${API_URL}/polls/${pollId}`,
           {
             method: "DELETE",
+
+            headers: {
+              Accept:
+                "application/json",
+            },
           }
         );
 
+      /*
+       * IMPORTANT:
+       * Do NOT directly call response.json().
+       *
+       * Render/backend may return an empty
+       * response body.
+       *
+       * readResponse() safely handles both
+       * JSON and empty responses.
+       */
+
       const data =
-        await response.json();
+        await readResponse(
+          response
+        );
+
+      console.log(
+        "Delete response:",
+        response.status,
+        data
+      );
 
       if (!response.ok) {
         throw new Error(
           data.error ||
-            "Failed to delete poll"
+            `Failed to delete poll (${response.status})`
         );
       }
 
       // Remove immediately from UI
-
       setPolls(
         (currentPolls) =>
           currentPolls.filter(
             (poll) => {
               const id =
-                poll.id ||
-                poll._id;
+                getPollId(poll);
 
-              return id !==
-                pollId;
+              return (
+                id !==
+                String(pollId)
+              );
             }
           )
       );
@@ -541,18 +628,29 @@ function HomePage() {
     }
   };
 
-  // ----------------------------------------
-  // Share poll
-  // ----------------------------------------
+  // ========================================
+  // SHARE POLL
+  // ========================================
 
-  const sharePoll = async (
-    pollId
-  ) => {
+  const sharePoll = async (pollId) => {
+    if (!pollId) {
+      return;
+    }
+
+    /*
+     * GitHub Pages project URL.
+     *
+     * Your website:
+     * https://lakshmipriyas-25.github.io/live-polling-app/
+     */
+
     const shareUrl =
-      `${window.location.origin}/poll/${pollId}`;
+      `${window.location.origin}/live-polling-app/poll/${pollId}`;
 
     try {
-      if (navigator.share) {
+      if (
+        navigator.share
+      ) {
         await navigator.share({
           title:
             "Live Poll",
@@ -583,15 +681,25 @@ function HomePage() {
     }
   };
 
-  // ----------------------------------------
-  // Calculate total votes
-  // ----------------------------------------
+  // ========================================
+  // TOTAL VOTES
+  // ========================================
 
-  const getTotalVotes = (
-    poll
-  ) => {
+  const getTotalVotes = (poll) => {
+    if (
+      !poll ||
+      !Array.isArray(
+        poll.options
+      )
+    ) {
+      return 0;
+    }
+
     return poll.options.reduce(
-      (total, option) =>
+      (
+        total,
+        option
+      ) =>
         total +
         Number(
           option.votes || 0
@@ -600,19 +708,54 @@ function HomePage() {
     );
   };
 
-  // ----------------------------------------
-  // UI
-  // ----------------------------------------
+  // ========================================
+  // LOADING
+  // ========================================
+
+  if (loading) {
+    return (
+      <div className="app">
+        <header className="navbar">
+          <div className="nav-container">
+            <Link
+              to="/"
+              className="logo"
+            >
+              Live Polling
+            </Link>
+
+            <div className="live-badge">
+              <span className="live-dot"></span>
+              LIVE
+            </div>
+          </div>
+        </header>
+
+        <main className="container">
+          <div className="loading-state">
+            <div className="spinner"></div>
+
+            <p>
+              Loading polls...
+            </p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // ========================================
+  // MAIN UI
+  // ========================================
 
   return (
     <div className="app">
 
-      {/* ================================== */}
+      {/* ================================= */}
       {/* NAVBAR */}
-      {/* ================================== */}
+      {/* ================================= */}
 
       <header className="navbar">
-
         <div className="nav-container">
 
           <Link
@@ -623,24 +766,22 @@ function HomePage() {
           </Link>
 
           <div className="live-badge">
-
             <span className="live-dot"></span>
-
             LIVE
-
           </div>
 
         </div>
-
       </header>
 
-      {/* ================================== */}
+      {/* ================================= */}
       {/* MAIN */}
-      {/* ================================== */}
+      {/* ================================= */}
 
       <main className="container">
 
+        {/* ================================= */}
         {/* HERO */}
+        {/* ================================= */}
 
         <section className="hero">
 
@@ -699,7 +840,7 @@ function HomePage() {
             onSubmit={createPoll}
           >
 
-            {/* Question */}
+            {/* QUESTION */}
 
             <div className="form-group">
 
@@ -725,7 +866,7 @@ function HomePage() {
 
             </div>
 
-            {/* Options */}
+            {/* OPTIONS */}
 
             <div className="form-group">
 
@@ -757,9 +898,7 @@ function HomePage() {
                       <input
                         type="text"
                         value={option}
-                        onChange={(
-                          event
-                        ) =>
+                        onChange={(event) =>
                           updateOption(
                             index,
                             event.target.value
@@ -773,7 +912,6 @@ function HomePage() {
 
                       {options.length >
                         2 && (
-
                         <button
                           type="button"
                           className="remove-option"
@@ -785,7 +923,6 @@ function HomePage() {
                         >
                           ×
                         </button>
-
                       )}
 
                     </div>
@@ -798,7 +935,9 @@ function HomePage() {
               <button
                 type="button"
                 className="add-option-button"
-                onClick={addOption}
+                onClick={
+                  addOption
+                }
                 disabled={
                   options.length >=
                   10
@@ -809,7 +948,7 @@ function HomePage() {
 
             </div>
 
-            {/* Error */}
+            {/* ERROR */}
 
             {error && (
               <div className="alert alert-error">
@@ -817,7 +956,7 @@ function HomePage() {
               </div>
             )}
 
-            {/* Success */}
+            {/* SUCCESS */}
 
             {success && (
               <div className="alert alert-success">
@@ -825,18 +964,18 @@ function HomePage() {
               </div>
             )}
 
-            {/* Submit */}
+            {/* SUBMIT */}
 
             <button
               type="submit"
               className="create-button"
-              disabled={creating}
+              disabled={
+                creating
+              }
             >
-
               {creating
                 ? "Creating Poll..."
                 : "Create Poll →"}
-
             </button>
 
           </form>
@@ -880,26 +1019,11 @@ function HomePage() {
 
           </div>
 
-          {/* Loading */}
-
-          {loading && (
-            <div className="loading-state">
-
-              <div className="spinner"></div>
-
-              <p>
-                Loading polls...
-              </p>
-
-            </div>
-          )}
-
-          {/* Error */}
+          {/* ERROR */}
 
           {!loading &&
             error &&
             polls.length === 0 && (
-
               <div className="error-card">
 
                 <h3>
@@ -912,16 +1036,17 @@ function HomePage() {
 
                 <button
                   className="retry-button"
-                  onClick={fetchPolls}
+                  onClick={
+                    fetchPolls
+                  }
                 >
                   Try Again
                 </button>
 
               </div>
-
             )}
 
-          {/* Empty */}
+          {/* EMPTY */}
 
           {!loading &&
             !error &&
@@ -947,7 +1072,7 @@ function HomePage() {
 
             )}
 
-          {/* Poll Cards */}
+          {/* POLL GRID */}
 
           {!loading &&
             polls.length > 0 && (
@@ -958,8 +1083,9 @@ function HomePage() {
                   (poll) => {
 
                     const pollId =
-                      poll.id ||
-                      poll._id;
+                      getPollId(
+                        poll
+                      );
 
                     const totalVotes =
                       getTotalVotes(
@@ -967,18 +1093,22 @@ function HomePage() {
                       );
 
                     const isDeleting =
-                      deleting[
-                        pollId
-                      ];
+                      pollId
+                        ? deleting[
+                            pollId
+                          ]
+                        : false;
 
                     return (
 
                       <article
                         className="poll-card"
-                        key={pollId}
+                        key={
+                          pollId
+                        }
                       >
 
-                        {/* Card Header */}
+                        {/* HEADER */}
 
                         <div className="poll-card-header">
 
@@ -993,84 +1123,90 @@ function HomePage() {
                           <span className="card-votes">
 
                             👥{" "}
-
                             {totalVotes}
 
                           </span>
 
                         </div>
 
-                        {/* Question */}
+                        {/* QUESTION */}
 
                         <h3>
-                          {poll.question}
+                          {
+                            poll.question
+                          }
                         </h3>
 
-                        {/* Results Preview */}
+                        {/* OPTIONS */}
 
                         <div className="card-options">
 
-                          {poll.options.map(
-                            (option) => {
+                          {Array.isArray(
+                            poll.options
+                          ) &&
+                            poll.options.map(
+                              (
+                                option
+                              ) => {
 
-                              const percentage =
-                                totalVotes ===
-                                0
-                                  ? 0
-                                  : Math.round(
-                                      (Number(
-                                        option.votes ||
-                                          0
-                                      ) /
-                                        totalVotes) *
-                                        100
-                                    );
+                                const percentage =
+                                  totalVotes ===
+                                  0
+                                    ? 0
+                                    : Math.round(
+                                        (Number(
+                                          option.votes ||
+                                            0
+                                        ) /
+                                          totalVotes) *
+                                          100
+                                      );
 
-                              return (
+                                return (
 
-                                <div
-                                  className="card-option"
-                                  key={
-                                    option.id
-                                  }
-                                >
+                                  <div
+                                    className="card-option"
+                                    key={
+                                      option.id
+                                    }
+                                  >
 
-                                  <div className="card-option-top">
+                                    <div className="card-option-top">
 
-                                    <span>
-                                      {
-                                        option.text
-                                      }
-                                    </span>
+                                      <span>
+                                        {
+                                          option.text
+                                        }
+                                      </span>
 
-                                    <span>
-                                      {
-                                        option.votes
-                                      }
-                                    </span>
+                                      <span>
+                                        {
+                                          option.votes
+                                        }
+                                      </span>
+
+                                    </div>
+
+                                    <div className="mini-progress">
+
+                                      <div
+                                        className="mini-progress-bar"
+                                        style={{
+                                          width: `${percentage}%`,
+                                        }}
+                                      ></div>
+
+                                    </div>
 
                                   </div>
 
-                                  <div className="mini-progress">
-
-                                    <div
-                                      className="mini-progress-bar"
-                                      style={{
-                                        width: `${percentage}%`,
-                                      }}
-                                    ></div>
-
-                                  </div>
-
-                                </div>
-
-                              );
-                            }
-                          )}
+                                );
+                              }
+                            )}
 
                         </div>
 
-                        {/* Actions */}
+                        {/* ACTIONS */}
 
                         <div className="poll-actions">
 
@@ -1082,6 +1218,7 @@ function HomePage() {
                           </Link>
 
                           <button
+                            type="button"
                             className="share-button"
                             onClick={() =>
                               sharePoll(
@@ -1104,7 +1241,8 @@ function HomePage() {
                               )
                             }
                             disabled={
-                              isDeleting
+                              isDeleting ||
+                              !pollId
                             }
                           >
 
@@ -1130,9 +1268,9 @@ function HomePage() {
 
       </main>
 
-      {/* ================================== */}
+      {/* ================================= */}
       {/* FOOTER */}
-      {/* ================================== */}
+      {/* ================================= */}
 
       <footer className="footer">
 
@@ -1158,12 +1296,16 @@ function App() {
 
       <Route
         path="/"
-        element={<HomePage />}
+        element={
+          <HomePage />
+        }
       />
 
       <Route
         path="/poll/:id"
-        element={<PollPage />}
+        element={
+          <PollPage />
+        }
       />
 
     </Routes>
