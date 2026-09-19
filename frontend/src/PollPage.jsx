@@ -8,6 +8,10 @@ import {
 const API_URL =
   "https://live-polling-app-4.onrender.com/api";
 
+// ========================================
+// POLL PAGE
+// ========================================
+
 function PollPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -16,8 +20,7 @@ function PollPage() {
   const [loading, setLoading] = useState(true);
   const [voting, setVoting] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [selectedOption, setSelectedOption] =
-    useState("");
+  const [selectedOption, setSelectedOption] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -26,8 +29,7 @@ function PollPage() {
   // ========================================
 
   const [voterId] = useState(() => {
-    let savedId =
-      localStorage.getItem("voterId");
+    let savedId = localStorage.getItem("voterId");
 
     if (!savedId) {
       savedId = crypto.randomUUID();
@@ -49,22 +51,19 @@ function PollPage() {
     const text = await response.text();
 
     console.log(
-      "API status:",
-      response.status
-    );
-
-    console.log(
-      "API response:",
+      "API RESPONSE:",
+      response.status,
       text
     );
 
+    // Empty response
     if (!text || !text.trim()) {
       return {};
     }
 
     try {
       return JSON.parse(text);
-    } catch (err) {
+    } catch (error) {
       console.error(
         "Invalid JSON from server:",
         text
@@ -81,6 +80,12 @@ function PollPage() {
   // ========================================
 
   const fetchPoll = async () => {
+    if (!id) {
+      setError("Invalid poll ID.");
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError("");
@@ -92,6 +97,12 @@ function PollPage() {
       const data =
         await readResponse(response);
 
+      console.log(
+        "GET POLL:",
+        response.status,
+        data
+      );
+
       if (!response.ok) {
         throw new Error(
           data.error ||
@@ -101,11 +112,12 @@ function PollPage() {
 
       if (!data.poll) {
         throw new Error(
-          "Poll data was not returned by server."
+          "Server did not return poll data."
         );
       }
 
       setPoll(data.poll);
+
     } catch (err) {
       console.error(
         "Fetch poll error:",
@@ -116,6 +128,7 @@ function PollPage() {
         err.message ||
           "Unable to load poll."
       );
+
     } finally {
       setLoading(false);
     }
@@ -126,9 +139,7 @@ function PollPage() {
   // ========================================
 
   useEffect(() => {
-    if (id) {
-      fetchPoll();
-    }
+    fetchPoll();
   }, [id]);
 
   // ========================================
@@ -156,16 +167,18 @@ function PollPage() {
           const payload =
             JSON.parse(event.data);
 
-          const data =
-            payload?.data ?? payload;
+          const updatedPoll =
+            payload.data ?? payload;
 
           // ==================================
           // POLL DELETED
           // ==================================
 
           if (
-            data?.type === "deleted" ||
-            payload?.type === "deleted"
+            updatedPoll?.type ===
+              "deleted" ||
+            payload?.type ===
+              "deleted"
           ) {
             setPoll(null);
 
@@ -182,9 +195,16 @@ function PollPage() {
           // POLL UPDATED
           // ==================================
 
-          if (data?.question) {
-            setPoll(data);
+          if (
+            updatedPoll &&
+            updatedPoll.question &&
+            Array.isArray(
+              updatedPoll.options
+            )
+          ) {
+            setPoll(updatedPoll);
           }
+
         } catch (err) {
           console.error(
             "Real-time update error:",
@@ -196,7 +216,7 @@ function PollPage() {
 
     eventSource.onerror = () => {
       console.log(
-        "Real-time connection interrupted. Retrying..."
+        "Real-time connection interrupted."
       );
     };
 
@@ -219,6 +239,10 @@ function PollPage() {
     }
 
     if (!poll) {
+      setError(
+        "Poll is not available."
+      );
+
       return;
     }
 
@@ -246,6 +270,12 @@ function PollPage() {
       const data =
         await readResponse(response);
 
+      console.log(
+        "VOTE RESPONSE:",
+        response.status,
+        data
+      );
+
       if (!response.ok) {
         throw new Error(
           data.error ||
@@ -253,24 +283,24 @@ function PollPage() {
         );
       }
 
-      // Backend returned updated poll
+      // ==================================
+      // UPDATED POLL
+      // ==================================
+
       if (data.poll) {
         setPoll(data.poll);
-      } else {
-        // If backend gives empty response,
-        // reload poll from server.
-        await fetchPoll();
       }
+
+      setSelectedOption("");
 
       setSuccess(
         "✓ Your vote has been recorded!"
       );
 
-      setSelectedOption("");
-
       setTimeout(() => {
         setSuccess("");
       }, 3000);
+
     } catch (err) {
       console.error(
         "Vote error:",
@@ -281,6 +311,7 @@ function PollPage() {
         err.message ||
           "Unable to submit vote."
       );
+
     } finally {
       setVoting(false);
     }
@@ -291,7 +322,11 @@ function PollPage() {
   // ========================================
 
   const deletePoll = async () => {
-    if (!poll || !id) {
+    if (!poll) {
+      setError(
+        "Poll is not available."
+      );
+
       return;
     }
 
@@ -309,11 +344,6 @@ function PollPage() {
       setError("");
       setSuccess("");
 
-      console.log(
-        "Deleting poll:",
-        id
-      );
-
       const response =
         await fetch(
           `${API_URL}/polls/${id}`,
@@ -326,10 +356,14 @@ function PollPage() {
         await readResponse(response);
 
       console.log(
-        "Delete response:",
+        "DELETE RESPONSE:",
         response.status,
         data
       );
+
+      // ==================================
+      // DELETE FAILED
+      // ==================================
 
       if (!response.ok) {
         throw new Error(
@@ -348,10 +382,10 @@ function PollPage() {
         "✓ Poll deleted successfully!"
       );
 
-      // Go back to home
       setTimeout(() => {
         navigate("/");
       }, 700);
+
     } catch (err) {
       console.error(
         "Delete poll error:",
@@ -393,6 +427,7 @@ function PollPage() {
 
           url: shareUrl,
         });
+
       } else if (
         navigator.clipboard
       ) {
@@ -408,11 +443,11 @@ function PollPage() {
           setSuccess("");
         }, 2500);
       } else {
-        setSuccess(
-          "Copy this link: " +
-            shareUrl
+        setError(
+          "Unable to copy poll link."
         );
       }
+
     } catch (err) {
       console.log(
         "Share cancelled:",
@@ -439,11 +474,14 @@ function PollPage() {
       (
         total,
         option
-      ) =>
-        total +
-        Number(
-          option.votes || 0
-        ),
+      ) => {
+        return (
+          total +
+          Number(
+            option.votes || 0
+          )
+        );
+      },
       0
     );
   };
@@ -519,7 +557,7 @@ function PollPage() {
   }
 
   // ========================================
-  // POLL NOT FOUND / DELETED
+  // POLL NOT FOUND
   // ========================================
 
   if (!poll) {
@@ -847,10 +885,13 @@ function PollPage() {
               </div>
 
               <div className="poll-count">
+
                 {totalVotes}{" "}
+
                 {totalVotes === 1
                   ? "Vote"
                   : "Votes"}
+
               </div>
 
             </div>
@@ -885,13 +926,16 @@ function PollPage() {
                           </span>
 
                           <span className="result-value">
+
                             {
                               option.votes
                             }{" "}
+
                             (
                             {
                               percentage
                             }%)
+
                           </span>
 
                         </div>
