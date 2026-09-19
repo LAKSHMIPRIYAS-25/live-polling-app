@@ -11,95 +11,105 @@ const API_URL =
   "https://live-polling-app-4.onrender.com/api";
 
 // ========================================
+// SAFE RESPONSE READER
+// ========================================
+
+async function readResponse(response) {
+  const text = await response.text();
+
+  if (!text || !text.trim()) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    console.error(
+      "Invalid JSON response:",
+      text
+    );
+
+    return {
+      error: text,
+    };
+  }
+}
+
+// ========================================
+// GET POLL ID
+// ========================================
+
+function getPollId(poll) {
+  if (!poll) {
+    return null;
+  }
+
+  if (poll.id) {
+    return String(poll.id);
+  }
+
+  if (poll._id) {
+    if (typeof poll._id === "string") {
+      return poll._id;
+    }
+
+    if (poll._id.$oid) {
+      return String(poll._id.$oid);
+    }
+  }
+
+  return null;
+}
+
+// ========================================
 // HOME PAGE
 // ========================================
 
 function HomePage() {
   const [polls, setPolls] = useState([]);
 
-  const [question, setQuestion] = useState("");
+  const [question, setQuestion] =
+    useState("");
 
   const [options, setOptions] = useState([
     "",
     "",
   ]);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
 
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] =
+    useState(false);
 
-  const [deleting, setDeleting] = useState({});
+  const [deleting, setDeleting] =
+    useState({});
 
-  const [error, setError] = useState("");
+  const [error, setError] =
+    useState("");
 
-  const [success, setSuccess] = useState("");
+  const [success, setSuccess] =
+    useState("");
 
   // ========================================
   // VOTER ID
   // ========================================
 
   const [voterId] = useState(() => {
-    let id = localStorage.getItem("voterId");
+    let id =
+      localStorage.getItem("voterId");
 
     if (!id) {
       id = crypto.randomUUID();
 
-      localStorage.setItem("voterId", id);
+      localStorage.setItem(
+        "voterId",
+        id
+      );
     }
 
     return id;
   });
-
-  // Prevent unused variable warning
-  console.log("Voter ID:", voterId);
-
-  // ========================================
-  // GET POLL ID
-  // ========================================
-
-  const getPollId = (poll) => {
-    if (!poll) {
-      return null;
-    }
-
-    // Backend JSON normally returns "id"
-    if (poll.id) {
-      return String(poll.id);
-    }
-
-    // Fallback
-    if (poll._id) {
-      if (typeof poll._id === "string") {
-        return poll._id;
-      }
-
-      if (poll._id.$oid) {
-        return poll._id.$oid;
-      }
-    }
-
-    return null;
-  };
-
-  // ========================================
-  // SAFE JSON READER
-  // ========================================
-
-  const readResponse = async (response) => {
-    const text = await response.text();
-
-    if (!text) {
-      return {};
-    }
-
-    try {
-      return JSON.parse(text);
-    } catch {
-      return {
-        error: text,
-      };
-    }
-  };
 
   // ========================================
   // FETCH POLLS
@@ -120,7 +130,7 @@ function HomePage() {
       if (!response.ok) {
         throw new Error(
           data.error ||
-            "Failed to load polls"
+            `Failed to load polls (${response.status})`
         );
       }
 
@@ -181,15 +191,15 @@ function HomePage() {
         (event) => {
           try {
             const payload =
-              JSON.parse(
-                event.data
-              );
+              JSON.parse(event.data);
 
             const updatedPoll =
-              payload.data ??
-              payload;
+              payload.data ?? payload;
 
-            // Poll deleted
+            // ------------------------------
+            // DELETED POLL
+            // ------------------------------
+
             if (
               updatedPoll?.type ===
                 "deleted" ||
@@ -223,7 +233,10 @@ function HomePage() {
               return;
             }
 
-            // Poll updated
+            // ------------------------------
+            // UPDATED POLL
+            // ------------------------------
+
             if (updatedPoll) {
               setPolls(
                 (currentPolls) =>
@@ -351,7 +364,6 @@ function HomePage() {
     const cleanQuestion =
       question.trim();
 
-    // Question validation
     if (!cleanQuestion) {
       setError(
         "Question is required."
@@ -376,7 +388,6 @@ function HomePage() {
       return;
     }
 
-    // Options
     const cleanOptions =
       options.map((option) =>
         option.trim()
@@ -402,7 +413,6 @@ function HomePage() {
       return;
     }
 
-    // Duplicate validation
     const normalizedOptions =
       cleanOptions.map(
         (option) =>
@@ -459,13 +469,13 @@ function HomePage() {
       if (!response.ok) {
         throw new Error(
           data.error ||
-            "Failed to create poll"
+            `Failed to create poll (${response.status})`
         );
       }
 
       if (!data.poll) {
         throw new Error(
-          "Poll was created but server did not return poll data."
+          "Server did not return poll data."
         );
       }
 
@@ -490,6 +500,7 @@ function HomePage() {
       setTimeout(() => {
         setSuccess("");
       }, 3000);
+
     } catch (err) {
       console.error(
         "Create poll error:",
@@ -500,6 +511,7 @@ function HomePage() {
         err.message ||
           "Unable to create poll."
       );
+
     } finally {
       setCreating(false);
     }
@@ -545,7 +557,9 @@ function HomePage() {
 
       const response =
         await fetch(
-          `${API_URL}/polls/${pollId}`,
+          `${API_URL}/polls/${encodeURIComponent(
+            pollId
+          )}`,
           {
             method: "DELETE",
 
@@ -558,13 +572,11 @@ function HomePage() {
 
       /*
        * IMPORTANT:
-       * Do NOT directly call response.json().
+       * Do NOT use response.json()
+       * here.
        *
-       * Render/backend may return an empty
-       * response body.
-       *
-       * readResponse() safely handles both
-       * JSON and empty responses.
+       * Render may sometimes return
+       * an empty response.
        */
 
       const data =
@@ -585,7 +597,10 @@ function HomePage() {
         );
       }
 
-      // Remove immediately from UI
+      // ------------------------------
+      // REMOVE FROM UI
+      // ------------------------------
+
       setPolls(
         (currentPolls) =>
           currentPolls.filter(
@@ -608,6 +623,7 @@ function HomePage() {
       setTimeout(() => {
         setSuccess("");
       }, 3000);
+
     } catch (err) {
       console.error(
         "Delete poll error:",
@@ -618,6 +634,7 @@ function HomePage() {
         err.message ||
           "Unable to delete poll."
       );
+
     } finally {
       setDeleting(
         (current) => ({
@@ -636,13 +653,6 @@ function HomePage() {
     if (!pollId) {
       return;
     }
-
-    /*
-     * GitHub Pages project URL.
-     *
-     * Your website:
-     * https://lakshmipriyas-25.github.io/live-polling-app/
-     */
 
     const shareUrl =
       `${window.location.origin}/live-polling-app/poll/${pollId}`;
@@ -715,8 +725,11 @@ function HomePage() {
   if (loading) {
     return (
       <div className="app">
+
         <header className="navbar">
+
           <div className="nav-container">
+
             <Link
               to="/"
               className="logo"
@@ -725,21 +738,31 @@ function HomePage() {
             </Link>
 
             <div className="live-badge">
+
               <span className="live-dot"></span>
+
               LIVE
+
             </div>
+
           </div>
+
         </header>
 
         <main className="container">
+
           <div className="loading-state">
+
             <div className="spinner"></div>
 
             <p>
               Loading polls...
             </p>
+
           </div>
+
         </main>
+
       </div>
     );
   }
@@ -751,11 +774,10 @@ function HomePage() {
   return (
     <div className="app">
 
-      {/* ================================= */}
       {/* NAVBAR */}
-      {/* ================================= */}
 
       <header className="navbar">
+
         <div className="nav-container">
 
           <Link
@@ -766,22 +788,22 @@ function HomePage() {
           </Link>
 
           <div className="live-badge">
+
             <span className="live-dot"></span>
+
             LIVE
+
           </div>
 
         </div>
+
       </header>
 
-      {/* ================================= */}
       {/* MAIN */}
-      {/* ================================= */}
 
       <main className="container">
 
-        {/* ================================= */}
         {/* HERO */}
-        {/* ================================= */}
 
         <section className="hero">
 
@@ -808,9 +830,7 @@ function HomePage() {
 
         </section>
 
-        {/* ================================= */}
         {/* CREATE POLL */}
-        {/* ================================= */}
 
         <section className="create-section">
 
@@ -912,6 +932,7 @@ function HomePage() {
 
                       {options.length >
                         2 && (
+
                         <button
                           type="button"
                           className="remove-option"
@@ -923,6 +944,7 @@ function HomePage() {
                         >
                           ×
                         </button>
+
                       )}
 
                     </div>
@@ -935,9 +957,7 @@ function HomePage() {
               <button
                 type="button"
                 className="add-option-button"
-                onClick={
-                  addOption
-                }
+                onClick={addOption}
                 disabled={
                   options.length >=
                   10
@@ -969,9 +989,7 @@ function HomePage() {
             <button
               type="submit"
               className="create-button"
-              disabled={
-                creating
-              }
+              disabled={creating}
             >
               {creating
                 ? "Creating Poll..."
@@ -982,9 +1000,7 @@ function HomePage() {
 
         </section>
 
-        {/* ================================= */}
         {/* POLLS */}
-        {/* ================================= */}
 
         <section className="polls-section">
 
@@ -1021,256 +1037,250 @@ function HomePage() {
 
           {/* ERROR */}
 
-          {!loading &&
-            error &&
+          {error &&
             polls.length === 0 && (
-              <div className="error-card">
 
-                <h3>
-                  ❌ Unable to load polls
-                </h3>
+            <div className="error-card">
 
-                <p>
-                  {error}
-                </p>
+              <h3>
+                ❌ Unable to load polls
+              </h3>
 
-                <button
-                  className="retry-button"
-                  onClick={
-                    fetchPolls
-                  }
-                >
-                  Try Again
-                </button>
+              <p>
+                {error}
+              </p>
 
-              </div>
-            )}
+              <button
+                className="retry-button"
+                onClick={fetchPolls}
+              >
+                Try Again
+              </button>
+
+            </div>
+
+          )}
 
           {/* EMPTY */}
 
-          {!loading &&
-            !error &&
+          {!error &&
             polls.length === 0 && (
 
-              <div className="empty-state">
+            <div className="empty-state">
 
-                <div className="empty-icon">
-                  📊
-                </div>
-
-                <h3>
-                  No polls yet
-                </h3>
-
-                <p>
-                  Create the first poll
-                  and start collecting
-                  votes.
-                </p>
-
+              <div className="empty-icon">
+                📊
               </div>
 
-            )}
+              <h3>
+                No polls yet
+              </h3>
+
+              <p>
+                Create the first poll
+                and start collecting
+                votes.
+              </p>
+
+            </div>
+
+          )}
 
           {/* POLL GRID */}
 
-          {!loading &&
-            polls.length > 0 && (
+          {polls.length > 0 && (
 
-              <div className="poll-grid">
+            <div className="poll-grid">
 
-                {polls.map(
-                  (poll) => {
+              {polls.map(
+                (poll) => {
 
-                    const pollId =
-                      getPollId(
-                        poll
-                      );
+                  const pollId =
+                    getPollId(poll);
 
-                    const totalVotes =
-                      getTotalVotes(
-                        poll
-                      );
+                  const totalVotes =
+                    getTotalVotes(
+                      poll
+                    );
 
-                    const isDeleting =
-                      pollId
-                        ? deleting[
-                            pollId
-                          ]
-                        : false;
-
-                    return (
-
-                      <article
-                        className="poll-card"
-                        key={
+                  const isDeleting =
+                    pollId
+                      ? deleting[
                           pollId
+                        ]
+                      : false;
+
+                  return (
+
+                    <article
+                      className="poll-card"
+                      key={
+                        pollId ||
+                        Math.random()
+                      }
+                    >
+
+                      {/* HEADER */}
+
+                      <div className="poll-card-header">
+
+                        <span className="live-label">
+
+                          <span className="live-dot"></span>
+
+                          LIVE
+
+                        </span>
+
+                        <span className="card-votes">
+
+                          👥{" "}
+                          {totalVotes}
+
+                        </span>
+
+                      </div>
+
+                      {/* QUESTION */}
+
+                      <h3>
+                        {
+                          poll.question
                         }
-                      >
+                      </h3>
 
-                        {/* HEADER */}
+                      {/* OPTIONS */}
 
-                        <div className="poll-card-header">
+                      <div className="card-options">
 
-                          <span className="live-label">
+                        {Array.isArray(
+                          poll.options
+                        ) &&
+                          poll.options.map(
+                            (
+                              option
+                            ) => {
 
-                            <span className="live-dot"></span>
-
-                            LIVE
-
-                          </span>
-
-                          <span className="card-votes">
-
-                            👥{" "}
-                            {totalVotes}
-
-                          </span>
-
-                        </div>
-
-                        {/* QUESTION */}
-
-                        <h3>
-                          {
-                            poll.question
-                          }
-                        </h3>
-
-                        {/* OPTIONS */}
-
-                        <div className="card-options">
-
-                          {Array.isArray(
-                            poll.options
-                          ) &&
-                            poll.options.map(
-                              (
-                                option
-                              ) => {
-
-                                const percentage =
-                                  totalVotes ===
-                                  0
-                                    ? 0
-                                    : Math.round(
-                                        (Number(
+                              const percentage =
+                                totalVotes ===
+                                0
+                                  ? 0
+                                  : Math.round(
+                                      (
+                                        Number(
                                           option.votes ||
                                             0
                                         ) /
-                                          totalVotes) *
-                                          100
-                                      );
+                                        totalVotes
+                                      ) *
+                                        100
+                                    );
 
-                                return (
+                              return (
 
-                                  <div
-                                    className="card-option"
-                                    key={
-                                      option.id
-                                    }
-                                  >
+                                <div
+                                  className="card-option"
+                                  key={
+                                    option.id
+                                  }
+                                >
 
-                                    <div className="card-option-top">
+                                  <div className="card-option-top">
 
-                                      <span>
-                                        {
-                                          option.text
-                                        }
-                                      </span>
+                                    <span>
+                                      {
+                                        option.text
+                                      }
+                                    </span>
 
-                                      <span>
-                                        {
-                                          option.votes
-                                        }
-                                      </span>
-
-                                    </div>
-
-                                    <div className="mini-progress">
-
-                                      <div
-                                        className="mini-progress-bar"
-                                        style={{
-                                          width: `${percentage}%`,
-                                        }}
-                                      ></div>
-
-                                    </div>
+                                    <span>
+                                      {
+                                        option.votes
+                                      }
+                                    </span>
 
                                   </div>
 
-                                );
-                              }
-                            )}
+                                  <div className="mini-progress">
 
-                        </div>
+                                    <div
+                                      className="mini-progress-bar"
+                                      style={{
+                                        width: `${percentage}%`,
+                                      }}
+                                    />
 
-                        {/* ACTIONS */}
+                                  </div>
 
-                        <div className="poll-actions">
+                                </div>
 
-                          <Link
-                            to={`/poll/${pollId}`}
-                            className="view-button"
-                          >
-                            View Poll →
-                          </Link>
-
-                          <button
-                            type="button"
-                            className="share-button"
-                            onClick={() =>
-                              sharePoll(
-                                pollId
-                              )
+                              );
                             }
-                            disabled={
-                              isDeleting
-                            }
-                          >
-                            🔗 Share
-                          </button>
+                          )}
 
-                          <button
-                            type="button"
-                            className="delete-button"
-                            onClick={() =>
-                              deletePoll(
-                                pollId
-                              )
-                            }
-                            disabled={
-                              isDeleting ||
-                              !pollId
-                            }
-                          >
+                      </div>
 
-                            {isDeleting
-                              ? "Deleting..."
-                              : "🗑️ Delete"}
+                      {/* ACTIONS */}
 
-                          </button>
+                      <div className="poll-actions">
 
-                        </div>
+                        <Link
+                          to={`/poll/${pollId}`}
+                          className="view-button"
+                        >
+                          View Poll →
+                        </Link>
 
-                      </article>
+                        <button
+                          type="button"
+                          className="share-button"
+                          onClick={() =>
+                            sharePoll(
+                              pollId
+                            )
+                          }
+                          disabled={
+                            isDeleting
+                          }
+                        >
+                          🔗 Share
+                        </button>
 
-                    );
-                  }
-                )}
+                        <button
+                          type="button"
+                          className="delete-button"
+                          onClick={() =>
+                            deletePoll(
+                              pollId
+                            )
+                          }
+                          disabled={
+                            isDeleting ||
+                            !pollId
+                          }
+                        >
+                          {isDeleting
+                            ? "Deleting..."
+                            : "🗑️ Delete"}
+                        </button>
 
-              </div>
+                      </div>
 
-            )}
+                    </article>
+
+                  );
+                }
+              )}
+
+            </div>
+
+          )}
 
         </section>
 
       </main>
 
-      {/* ================================= */}
       {/* FOOTER */}
-      {/* ================================= */}
 
       <footer className="footer">
 
